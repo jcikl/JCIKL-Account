@@ -231,6 +231,9 @@ export function BankTransactions() {
   const [tableStatusFilter, setTableStatusFilter] = React.useState("all")
   const [referenceFilter, setReferenceFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("")
+  
+  // 新增最近30天过滤状态
+  const [showLast30Days, setShowLast30Days] = React.useState(true)
 
   
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -509,6 +512,19 @@ export function BankTransactions() {
   React.useEffect(() => {
     let filtered = transactions
 
+    // 最近30天过滤
+    if (showLast30Days) {
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
+      filtered = filtered.filter(transaction => {
+        const transactionDate = typeof transaction.date === 'string' 
+          ? new Date(transaction.date) 
+          : new Date(transaction.date.seconds * 1000)
+        return transactionDate >= thirtyDaysAgo
+      })
+    }
+
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(transaction =>
@@ -583,7 +599,7 @@ export function BankTransactions() {
 
     setFilteredTransactions(filtered)
     setSortedTransactions(filtered)
-  }, [transactions, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, referenceFilter, categoryFilter])
+  }, [transactions, showLast30Days, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, referenceFilter, categoryFilter])
 
   const resetForm = () => {
     setFormData({
@@ -1030,7 +1046,7 @@ export function BankTransactions() {
   const netAmount = totalIncome - totalExpenses
   
   // 计算累计余额 (假设初始余额为0，可以通过设置调整)
-  const initialBalance = 81089.82 // 可以从设置或配置中获取
+  const initialBalance = 38887.57  // 可以从设置或配置中获取
   const runningBalance = calculateRunningBalance(filteredTransactions, initialBalance)
 
   if (loading) {
@@ -1158,6 +1174,23 @@ export function BankTransactions() {
               className="pl-8 w-64"
             />
           </div>
+          
+          {/* 最近30天切换按钮 */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showLast30Days ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowLast30Days(!showLast30Days)}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              {showLast30Days ? "最近30天" : "显示全部"}
+            </Button>
+            {showLast30Days && (
+              <span className="text-sm text-muted-foreground">
+                显示最近30天的交易记录
+              </span>
+            )}
+          </div>
         </div>
 
       </div>
@@ -1168,7 +1201,14 @@ export function BankTransactions() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>所有交易</CardTitle>
-                <CardDescription>{filteredTransactions.length} 笔交易</CardDescription>
+                <CardDescription>
+                  {filteredTransactions.length} 笔交易
+                  {showLast30Days && (
+                    <span className="text-muted-foreground ml-2">
+                      (最近30天)
+                    </span>
+                  )}
+                </CardDescription>
               </div>
 
               {selectedTransactions.size > 0 && (
