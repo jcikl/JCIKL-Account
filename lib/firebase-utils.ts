@@ -1,7 +1,8 @@
 // lib/firebase-utils.ts
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter } from "firebase/firestore"
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore"
 import { db } from "./firebase"
 import type { Account, JournalEntry, Project, Transaction, UserProfile, Category } from "./data"
+import React from "react"
 
 // Generic CRUD operations
 export async function getCollection<T>(collectionName: string): Promise<T[]> {
@@ -749,5 +750,210 @@ export async function getCategoryStats(): Promise<{
   } catch (error) {
     console.error('Error getting category statistics:', error)
     throw new Error(`Failed to get category statistics: ${error}`)
+  }
+}
+
+// 缓存系统
+const cache = new Map<string, { data: any; timestamp: number; ttl: number }>()
+
+function getCachedData<T>(key: string): T | null {
+  const cached = cache.get(key)
+  if (!cached) return null
+  
+  if (Date.now() - cached.timestamp > cached.ttl) {
+    cache.delete(key)
+    return null
+  }
+  
+  return cached.data as T
+}
+
+function setCachedData<T>(key: string, data: T, ttl: number = 5 * 60 * 1000): void {
+  cache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl
+  })
+}
+
+// 优化的分页查询函数
+export async function getTransactionsWithPagination(
+  limitCount: number = 50, 
+  lastDoc?: any,
+  filters?: {
+    status?: string
+    dateRange?: { start: Date; end: Date }
+    searchTerm?: string
+    projectid?: string
+    category?: string
+  }
+): Promise<{
+  transactions: Transaction[]
+  lastDoc: any
+  hasMore: boolean
+}> {
+  try {
+    const q = query(
+      collection(db, "transactions"),
+      ...(filters?.status && filters.status !== 'all' ? [where("status", "==", filters.status)] : []),
+      ...(filters?.projectid && filters.projectid !== 'all' ? [where("projectid", "==", filters.projectid)] : []),
+      ...(filters?.category && filters.category !== 'all' ? [where("category", "==", filters.category)] : []),
+      ...(filters?.dateRange ? [
+        where("date", ">=", filters.dateRange.start),
+        where("date", "<=", filters.dateRange.end)
+      ] : []),
+      orderBy("date", "desc"),
+      limit(limitCount),
+      ...(lastDoc ? [startAfter(lastDoc)] : [])
+    )
+    
+    const querySnapshot = await getDocs(q)
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Transaction[]
+    
+    const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1]
+    
+    return {
+      transactions,
+      lastDoc: lastVisible,
+      hasMore: querySnapshot.docs.length === limitCount
+    }
+  } catch (error) {
+    console.error('Error fetching transactions with pagination:', error)
+    throw error
+  }
+}
+
+// 优化的批量获取函数
+export async function getTransactionsBatch(
+  batchSize: number = 100,
+  filters?: {
+    status?: string
+    dateRange?: { start: Date; end: Date }
+  }
+): Promise<Transaction[]> {
+  const cacheKey = `transactions_batch_${JSON.stringify(filters)}_${batchSize}`
+  const cached = getCachedData<Transaction[]>(cacheKey)
+  if (cached) return cached
+  
+  try {
+    const q = query(
+      collection(db, "transactions"),
+      ...(filters?.status && filters.status !== 'all' ? [where("status", "==", filters.status)] : []),
+      ...(filters?.dateRange ? [
+        where("date", ">=", filters.dateRange.start),
+        where("date", "<=", filters.dateRange.end)
+      ] : []),
+      orderBy("date", "desc"),
+      limit(batchSize)
+    )
+    
+    const querySnapshot = await getDocs(q)
+    const transactions = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Transaction[]
+    
+    setCachedData(cacheKey, transactions, 2 * 60 * 1000) // 2分钟缓存
+    return transactions
+  } catch (error) {
+    console.error('Error fetching transactions batch:', error)
+    throw error
+  }
+}
+
+// 优化的项目花费金额计算（并行处理）
+export async function getProjectsSpentAmounts(projectIds: string[]): Promise<Record<string, number>> {
+  const cacheKey = `projects_spent_${projectIds.sort().join('_')}`
+  const cached = getCachedData<Record<string, number>>(cacheKey)
+  if (cached) return cached
+  
+  try {
+    // 并行计算所有项目的花费金额
+    const spentPromises = projectIds.map(async (projectId) => {
+      try {
+        const spent = await getProjectSpentAmount(projectId)
+        return { [projectId]: spent }
+      } catch (error) {
+        console.error(`Error calculating spent amount for project ${projectId}:`, error)
+        return { [projectId]: 0 }
+      }
+    })
+    
+    const spentResults = await Promise.all(spentPromises)
+    const combinedSpentAmounts = spentResults.reduce((acc, curr) => ({ ...acc, ...curr }), {})
+    
+    setCachedData(cacheKey, combinedSpentAmounts, 5 * 60 * 1000) // 5分钟缓存
+    return combinedSpentAmounts
+  } catch (error) {
+    console.error('Error calculating projects spent amounts:', error)
+    throw error
+  }
+}
+
+// 实时监听函数
+export function useTransactionsRealtime(
+  filters?: {
+    status?: string
+    dateRange?: { start: Date; end: Date }
+  }
+) {
+  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    const q = query(
+      collection(db, "transactions"),
+      orderBy("date", "desc"),
+      ...(filters?.status && filters.status !== 'all' ? [where("status", "==", filters.status)] : []),
+      ...(filters?.dateRange ? [
+        where("date", ">=", filters.dateRange.start),
+        where("date", "<=", filters.dateRange.end)
+      ] : [])
+    )
+    
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const fetchedTransactions = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Transaction[]
+        setTransactions(fetchedTransactions)
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Error listening to transactions:', error)
+        setError(error.message)
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [filters?.status, filters?.dateRange?.start, filters?.dateRange?.end])
+
+  return { transactions, loading, error }
+}
+
+// 清理缓存函数
+export function clearCache(pattern?: string): void {
+  if (pattern) {
+    for (const key of cache.keys()) {
+      if (key.includes(pattern)) {
+        cache.delete(key)
+      }
+    }
+  } else {
+    cache.clear()
+  }
+}
+
+// 获取缓存统计
+export function getCacheStats(): { size: number; keys: string[] } {
+  return {
+    size: cache.size,
+    keys: Array.from(cache.keys())
   }
 }

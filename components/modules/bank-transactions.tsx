@@ -232,8 +232,9 @@ export function BankTransactions() {
   const [referenceFilter, setReferenceFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("")
   
-  // 新增最近30天过滤状态
-  const [showLast30Days, setShowLast30Days] = React.useState(true)
+  // 新增年份月份过滤状态
+  const [yearFilter, setYearFilter] = React.useState(new Date().getFullYear().toString())
+  const [monthFilter, setMonthFilter] = React.useState("all")
 
   
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -512,16 +513,24 @@ export function BankTransactions() {
   React.useEffect(() => {
     let filtered = transactions
 
-    // 最近30天过滤
-    if (showLast30Days) {
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 年份月份过滤
+    if (yearFilter && monthFilter) {
+      const selectedYear = parseInt(yearFilter)
+      const selectedMonth = parseInt(monthFilter)
       
       filtered = filtered.filter(transaction => {
         const transactionDate = typeof transaction.date === 'string' 
           ? new Date(transaction.date) 
           : new Date(transaction.date.seconds * 1000)
-        return transactionDate >= thirtyDaysAgo
+        
+        // 如果选择的是全年（monthFilter为"all"），只过滤年份
+        if (monthFilter === "all") {
+          return transactionDate.getFullYear() === selectedYear
+        }
+        
+        // 否则过滤特定年份和月份
+        return transactionDate.getFullYear() === selectedYear && 
+               transactionDate.getMonth() + 1 === selectedMonth
       })
     }
 
@@ -599,7 +608,7 @@ export function BankTransactions() {
 
     setFilteredTransactions(filtered)
     setSortedTransactions(filtered)
-  }, [transactions, showLast30Days, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, referenceFilter, categoryFilter])
+  }, [transactions, yearFilter, monthFilter, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, referenceFilter, categoryFilter])
 
   const resetForm = () => {
     setFormData({
@@ -1175,21 +1184,45 @@ export function BankTransactions() {
             />
           </div>
           
-          {/* 最近30天切换按钮 */}
+          {/* 年份月份过滤 */}
           <div className="flex items-center gap-2">
-            <Button
-              variant={showLast30Days ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowLast30Days(!showLast30Days)}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {showLast30Days ? "最近30天" : "显示全部"}
-            </Button>
-            {showLast30Days && (
-              <span className="text-sm text-muted-foreground">
-                显示最近30天的交易记录
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="year-filter" className="text-sm font-medium">
+                年份月份:
+              </Label>
+              <Select value={yearFilter} onValueChange={setYearFilter}>
+                <SelectTrigger className="w-24 h-8 text-xs">
+                  <SelectValue placeholder="年份" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const year = new Date().getFullYear() - 5 + i
+                    return (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+              <Select value={monthFilter} onValueChange={setMonthFilter}>
+                <SelectTrigger className="w-24 h-8 text-xs">
+                  <SelectValue placeholder="月份" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全年</SelectItem>
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const month = (i + 1).toString().padStart(2, '0')
+                    const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
+                    return (
+                      <SelectItem key={month} value={month}>
+                        {monthNames[i]}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -1203,9 +1236,9 @@ export function BankTransactions() {
                 <CardTitle>所有交易</CardTitle>
                 <CardDescription>
                   {filteredTransactions.length} 笔交易
-                  {showLast30Days && (
+                  {yearFilter && monthFilter && (
                     <span className="text-muted-foreground ml-2">
-                      (最近30天)
+                      ({yearFilter}年{monthFilter === "all" ? "全年" : monthFilter + "月"})
                     </span>
                   )}
                 </CardDescription>
