@@ -34,6 +34,11 @@ class CustomAuth {
   // 从 localStorage 恢复用户状态
   private restoreFromStorage(): void {
     try {
+      // 检查是否在浏览器环境中
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return
+      }
+      
       const storedUser = localStorage.getItem(AUTH_STORAGE_KEY)
       const timestamp = localStorage.getItem(AUTH_TIMESTAMP_KEY)
       
@@ -60,6 +65,11 @@ class CustomAuth {
   // 保存到 localStorage
   private saveToStorage(user: CustomAuthUser): void {
     try {
+      // 检查是否在浏览器环境中
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return
+      }
+      
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
       localStorage.setItem(AUTH_TIMESTAMP_KEY, Date.now().toString())
     } catch (error) {
@@ -70,6 +80,11 @@ class CustomAuth {
   // 清除 localStorage
   private clearStorage(): void {
     try {
+      // 检查是否在浏览器环境中
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return
+      }
+      
       localStorage.removeItem(AUTH_STORAGE_KEY)
       localStorage.removeItem(AUTH_TIMESTAMP_KEY)
     } catch (error) {

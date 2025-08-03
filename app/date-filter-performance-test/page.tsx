@@ -1,3 +1,5 @@
+"use client"
+
 import React from "react"
 import { BankTransactions } from "@/components/modules/bank-transactions"
 import { BankTransactionsFixed } from "@/components/modules/bank-transactions-fixed"

@@ -1,3 +1,5 @@
+"use client"
+
 import React from "react"
 import { BankTransactionsOptimized } from "@/components/modules/bank-transactions-optimized"
 import { DashboardOverviewOptimized } from "@/components/modules/dashboard-overview-optimized"
