@@ -207,7 +207,28 @@ export async function getAccountsWithPagination(limitCount: number = 50, lastDoc
 
 // Specific data fetching functions
 export async function getTransactions(): Promise<Transaction[]> {
-  return getCollection<Transaction>("transactions")
+  try {
+    // 按序号排序获取交易，如果没有序号则按日期排序
+    const q = query(collection(db, "transactions"), orderBy("sequenceNumber", "asc"))
+    const querySnapshot = await getDocs(q)
+    const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+    
+    // 如果所有交易都没有序号，按日期排序
+    const hasSequenceNumbers = transactions.some(t => t.sequenceNumber)
+    if (!hasSequenceNumbers) {
+      const dateQuery = query(collection(db, "transactions"), orderBy("date", "desc"))
+      const dateSnapshot = await getDocs(dateQuery)
+      return dateSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+    }
+    
+    return transactions
+  } catch (error) {
+    // 如果序号排序失败，回退到日期排序
+    console.warn('序号排序失败，回退到日期排序:', error)
+    const q = query(collection(db, "transactions"), orderBy("date", "desc"))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+  }
 }
 
 export async function getTransactionsByStatus(status: Transaction["status"]): Promise<Transaction[]> {
@@ -955,5 +976,62 @@ export function getCacheStats(): { size: number; keys: string[] } {
   return {
     size: cache.size,
     keys: Array.from(cache.keys())
+  }
+}
+
+// 序号相关的函数
+export async function getNextSequenceNumber(): Promise<number> {
+  try {
+    const q = query(collection(db, "transactions"), orderBy("sequenceNumber", "desc"), limit(1))
+    const querySnapshot = await getDocs(q)
+    
+    if (querySnapshot.empty) {
+      return 1
+    }
+    
+    const lastTransaction = querySnapshot.docs[0].data() as Transaction
+    return (lastTransaction.sequenceNumber || 0) + 1
+  } catch (error) {
+    console.error('Error getting next sequence number:', error)
+    // 如果出错，返回当前时间戳作为序号
+    return Date.now()
+  }
+}
+
+export async function updateTransactionSequence(transactionId: string, newSequenceNumber: number): Promise<void> {
+  try {
+    await updateDocument("transactions", transactionId, { sequenceNumber: newSequenceNumber })
+  } catch (error) {
+    console.error('Error updating transaction sequence:', error)
+    throw new Error(`Failed to update transaction sequence: ${error}`)
+  }
+}
+
+export async function reorderTransactions(transactionIds: string[]): Promise<void> {
+  try {
+    // 批量更新序号
+    const updatePromises = transactionIds.map((id, index) => 
+      updateDocument("transactions", id, { sequenceNumber: index + 1 })
+    )
+    
+    await Promise.all(updatePromises)
+  } catch (error) {
+    console.error('Error reordering transactions:', error)
+    throw new Error(`Failed to reorder transactions: ${error}`)
+  }
+}
+
+export async function addTransactionWithSequence(transactionData: Omit<Transaction, "id" | "sequenceNumber">): Promise<string> {
+  try {
+    const nextSequenceNumber = await getNextSequenceNumber()
+    const transactionWithSequence = {
+      ...transactionData,
+      sequenceNumber: nextSequenceNumber
+    }
+    
+    return await addDocument("transactions", transactionWithSequence)
+  } catch (error) {
+    console.error('Error adding transaction with sequence:', error)
+    throw new Error(`Failed to add transaction with sequence: ${error}`)
   }
 }

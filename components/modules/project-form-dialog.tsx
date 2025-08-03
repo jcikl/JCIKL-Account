@@ -22,6 +22,7 @@ import { generateProjectCode, getBODOptions, getBODDisplayName } from "@/lib/pro
 
 const projectFormSchema = z.object({
   name: z.string().min(1, "项目名称不能为空").max(100, "项目名称不能超过100个字符"),
+  projectYear: z.number().min(2020, "项目年份不能早于2020年").max(2030, "项目年份不能晚于2030年"),
   bodCategory: z.enum(["P", "HT", "EVP", "LS", "GLC", "VPI", "VPB", "VPIA", "VPC", "VPLOM"] as const, {
     required_error: "请选择BOD分类"
   }),
@@ -29,10 +30,7 @@ const projectFormSchema = z.object({
   status: z.enum(["Active", "Completed", "On Hold"], {
     required_error: "请选择项目状态"
   }),
-  startDate: z.date({
-    required_error: "请选择开始日期"
-  }),
-  endDate: z.date().optional(),
+  eventDate: z.date().optional(),
   description: z.string().optional(),
   assignedToUid: z.string().optional(),
   projectid: z.string().optional()
@@ -72,15 +70,27 @@ export function ProjectFormDialog({
     return new Date()
   }
 
+  // 从projectid中提取年份的辅助函数
+  const extractYearFromProjectId = (projectid: string): number => {
+    const parts = projectid.split('_')
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0])
+      if (!isNaN(year) && year >= 2020 && year <= 2030) {
+        return year
+      }
+    }
+    return new Date().getFullYear()
+  }
+
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
     defaultValues: {
       name: project?.name || "",
+      projectYear: project?.projectid ? extractYearFromProjectId(project.projectid) : new Date().getFullYear(),
       bodCategory: project?.bodCategory || "P",
       budget: project?.budget || 0,
       status: project?.status || "Active",
-      startDate: safeDateConversion(project?.startDate),
-      endDate: project?.endDate ? safeDateConversion(project.endDate) : undefined,
+      eventDate: project?.eventDate ? safeDateConversion(project.eventDate) : undefined,
       description: project?.description || "",
       assignedToUid: project?.assignedToUid || ""
     }
@@ -91,22 +101,22 @@ export function ProjectFormDialog({
     if (project) {
       form.reset({
         name: project.name,
+        projectYear: project.projectid ? extractYearFromProjectId(project.projectid) : new Date().getFullYear(),
         bodCategory: project.bodCategory,
         budget: project.budget,
         status: project.status,
-        startDate: safeDateConversion(project.startDate),
-        endDate: project.endDate ? safeDateConversion(project.endDate) : undefined,
+        eventDate: project.eventDate ? safeDateConversion(project.eventDate) : undefined,
         description: project.description || "",
         assignedToUid: project.assignedToUid || ""
       })
     } else {
       form.reset({
         name: "",
+        projectYear: new Date().getFullYear(),
         bodCategory: "P",
         budget: 0,
         status: "Active",
-        startDate: new Date(),
-        endDate: undefined,
+        eventDate: undefined,
         description: "",
         assignedToUid: ""
       })
@@ -117,8 +127,8 @@ export function ProjectFormDialog({
     try {
       setSaving(true)
       
-      // 自动生成项目代码
-      const projectCode = generateProjectCode(data.name, data.bodCategory, existingProjects)
+      // 自动生成项目代码，使用项目年份
+      const projectCode = generateProjectCode(data.name, data.bodCategory, existingProjects, data.projectYear)
       
       // 添加生成的代码到数据中，确保包含所有必要字段
       const projectDataWithCode = {
@@ -173,6 +183,32 @@ export function ProjectFormDialog({
 
               <FormField
                 control={form.control}
+                name="projectYear"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>项目年份 *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="2024"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || new Date().getFullYear())}
+                        min={2020}
+                        max={2030}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      项目所属年份，用于生成项目代码
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
                 name="bodCategory"
                 render={({ field }) => (
                   <FormItem>
@@ -192,15 +228,13 @@ export function ProjectFormDialog({
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      项目代码将自动生成: 年份_BOD_项目名称
+                      项目代码将自动生成: 项目年份_BOD_项目名称
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="budget"
@@ -222,7 +256,9 @@ export function ProjectFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="status"
@@ -245,15 +281,13 @@ export function ProjectFormDialog({
                   </FormItem>
                 )}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="startDate"
+                name="eventDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>开始日期 *</FormLabel>
+                    <FormLabel>活动日期</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -267,49 +301,7 @@ export function ProjectFormDialog({
                             {field.value ? (
                               format(field.value, "PPP", { locale: zhCN })
                             ) : (
-                              <span>选择开始日期</span>
-                            )}
-                            <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>结束日期</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: zhCN })
-                            ) : (
-                              <span>选择结束日期（可选）</span>
+                              <span>选择活动日期（可选）</span>
                             )}
                             <Calendar className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
@@ -328,7 +320,7 @@ export function ProjectFormDialog({
                       </PopoverContent>
                     </Popover>
                     <FormDescription>
-                      项目预计或实际完成日期
+                      项目活动日期
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

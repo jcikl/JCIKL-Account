@@ -47,6 +47,7 @@ interface ProjectFilters {
   status: string
   budgetRange: string
   bodCategory: string
+  projectYear: string
 }
 
 export function ProjectAccounts() {
@@ -81,7 +82,8 @@ export function ProjectAccounts() {
     search: "",
     status: "all",
     budgetRange: "all",
-    bodCategory: "all"
+    bodCategory: "all",
+    projectYear: "all"
   })
 
   const fetchProjects = React.useCallback(async () => {
@@ -140,6 +142,15 @@ export function ProjectAccounts() {
     // BOD分类筛选
     if (filters.bodCategory !== "all") {
       filtered = filtered.filter(project => project.bodCategory === filters.bodCategory)
+    }
+
+    // 项目年份筛选
+    if (filters.projectYear !== "all") {
+      filtered = filtered.filter(project => {
+        // 从projectid中提取年份
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === filters.projectYear
+      })
     }
 
     // 预算范围筛选
@@ -211,6 +222,11 @@ export function ProjectAccounts() {
     try {
       setSaving(true)
       
+      // 确保projectid已正确生成（包含项目年份）
+      if (!projectData.projectid) {
+        throw new Error("项目代码未生成")
+      }
+      
       if (editingProject) {
         // 更新现有项目
         await updateProject(editingProject.id!, projectData)
@@ -228,8 +244,7 @@ export function ProjectAccounts() {
         const newProjectData = {
           ...projectData,
           remaining: projectData.budget,
-          startDate: projectData.startDate.toISOString(),
-          endDate: projectData.endDate?.toISOString()
+          eventDate: projectData.eventDate?.toISOString()
         }
         
         const newProjectId = await addProject(newProjectData)
@@ -241,7 +256,7 @@ export function ProjectAccounts() {
         setProjects(prev => [...prev, newProject])
         toast({
           title: "项目创建成功",
-          description: `项目 "${projectData.name}" 已创建`,
+          description: `项目 "${projectData.name}" 已创建，代码: ${projectData.projectid}`,
         })
       }
     } catch (error) {
@@ -268,34 +283,35 @@ export function ProjectAccounts() {
       
       for (const projectData of importedProjects) {
         try {
-          // 检查项目是否已存在（基于名称和BOD分类，使用大写比较）
-          const existingProject = projects.find(p => 
-            p.name.toUpperCase() === projectData.name.toUpperCase() && 
-            p.bodCategory.toUpperCase() === projectData.bodCategory.toUpperCase()
-          )
+          // 检查项目是否已存在（基于项目代码）
+          const existingProject = projects.find(p => p.projectid === projectData.projectid)
           
           if (existingProject) {
-            // 更新现有项目（只更新开始日期）
+            // 更新现有项目
             const updateData = {
-              startDate: projectData.startDate
+              name: projectData.name,
+              bodCategory: projectData.bodCategory,
+              budget: projectData.budget,
+              status: projectData.status,
+              eventDate: projectData.eventDate,
+              description: projectData.description
             }
             
             await updateProject(existingProject.id!, updateData)
             updatedCount++
             // console.log(`✅ 项目已更新: ${projectData.name} - ${projectData.bodCategory}`)
           } else {
-            // 添加新项目（只保存三个必需字段，所有数据以大写存储）
+            // 添加新项目
             const newProjectData = {
-              name: projectData.name.toUpperCase(), // 转换为大写
+              name: projectData.name,
               projectid: projectData.projectid,
-              bodCategory: projectData.bodCategory.toUpperCase(), // 转换为大写
-              startDate: projectData.startDate,
-              budget: 0, // 默认值
-              spent: 0, // 默认值
-              remaining: 0, // 默认值
-              status: "Active" as const, // 默认状态
-              description: "", // 默认空描述
-              assignedToUid: "" // 默认空负责人
+              bodCategory: projectData.bodCategory,
+              budget: projectData.budget,
+              status: projectData.status,
+              eventDate: projectData.eventDate,
+              description: projectData.description || "",
+              assignedToUid: "", // 默认空负责人
+              remaining: projectData.budget // 初始剩余金额等于预算
             }
             
             await addProject(newProjectData)
@@ -326,6 +342,18 @@ export function ProjectAccounts() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // 获取可用的项目年份
+  const getAvailableProjectYears = () => {
+    const years = new Set<string>()
+    projects.forEach(project => {
+      const projectYear = project.projectid.split('_')[0]
+      if (projectYear && !isNaN(parseInt(projectYear))) {
+        years.add(projectYear)
+      }
+    })
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a)) // 降序排列
   }
 
   const totalBudget = projects.reduce((sum, project) => sum + (project.budget || 0), 0)
@@ -438,7 +466,7 @@ export function ProjectAccounts() {
           <CardDescription>查找特定项目或按条件筛选</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -457,6 +485,19 @@ export function ProjectAccounts() {
                 {Object.entries(BODCategories).map(([key, value]) => (
                   <SelectItem key={key} value={key}>
                     {key} - {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filters.projectYear} onValueChange={(value) => setFilters(prev => ({ ...prev, projectYear: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="项目年份" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">所有年份</SelectItem>
+                {getAvailableProjectYears().map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}年
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -552,7 +593,7 @@ export function ProjectAccounts() {
                     <TableHead>剩余</TableHead>
                     <TableHead>进度</TableHead>
                     <TableHead>状态</TableHead>
-                    <TableHead>开始日期</TableHead>
+                    <TableHead>活动日期</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -599,7 +640,7 @@ export function ProjectAccounts() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {formatProjectDate(project.startDate)}
+                          {project.eventDate ? formatProjectDate(project.eventDate) : 'N/A'}
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -735,8 +776,7 @@ export function ProjectAccounts() {
                           代码: {project.projectid}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          开始: {formatProjectDate(project.startDate)}
-                          {project.endDate && ` • 完成: ${formatProjectDate(project.endDate)}`}
+                          活动日期: {project.eventDate ? formatProjectDate(project.eventDate) : 'N/A'}
                         </p>
                       </div>
                     </div>

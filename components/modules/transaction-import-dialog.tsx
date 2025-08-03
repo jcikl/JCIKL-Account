@@ -10,10 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Clipboard, Upload, AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { Clipboard, Upload, AlertCircle, CheckCircle, XCircle, TrendingUp, TrendingDown, DollarSign } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { Transaction } from "@/lib/data"
 
 const importFormSchema = z.object({
@@ -241,14 +243,29 @@ export function TransactionImportDialog({
     setParseError("")
   }
 
+  // 计算总收支统计
+  const calculateTotals = (transactions: ParsedTransaction[]) => {
+    const totals = transactions.reduce((acc, transaction) => {
+      acc.totalExpense += transaction.expense
+      acc.totalIncome += transaction.income
+      acc.netAmount += transaction.income - transaction.expense
+      return acc
+    }, { totalExpense: 0, totalIncome: 0, netAmount: 0 })
+    
+    return totals
+  }
+
   const validTransactions = parsedTransactions.filter(transaction => transaction.isValid)
   const invalidTransactions = parsedTransactions.filter(transaction => !transaction.isValid)
   const newTransactions = validTransactions.filter(transaction => !transaction.isUpdate)
   const updateTransactions = validTransactions.filter(transaction => transaction.isUpdate)
+  
+  // 计算总收支
+  const totals = calculateTotals(validTransactions)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>粘贴导入交易数据</DialogTitle>
           <DialogDescription>
@@ -404,8 +421,72 @@ export function TransactionImportDialog({
             )}
 
             {parsedTransactions.length > 0 && !isParsing && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <Separator />
+                
+                {/* 统计信息卡片 */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">总支出</CardTitle>
+                      <TrendingDown className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-red-600">
+                        ${totals.totalExpense.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {validTransactions.filter(t => t.expense > 0).length} 笔支出
+                      </p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">总收入</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">
+                        ${totals.totalIncome.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {validTransactions.filter(t => t.income > 0).length} 笔收入
+                      </p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">净收支</CardTitle>
+                      <DollarSign className="h-4 w-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`text-2xl font-bold ${totals.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ${totals.netAmount.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {totals.netAmount >= 0 ? '净收入' : '净支出'}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">交易统计</CardTitle>
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {validTransactions.length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {newTransactions.length} 新增, {updateTransactions.length} 更新
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">解析结果</h4>
                   <div className="flex gap-2">
@@ -431,38 +512,92 @@ export function TransactionImportDialog({
                         {invalidTransactions.length} 个无效
                       </Badge>
                     )}
+                    <Badge variant="outline" className="flex items-center gap-1 bg-red-50 text-red-700">
+                      <TrendingDown className="h-3 w-3" />
+                      支出: ${totals.totalExpense.toFixed(2)}
+                    </Badge>
+                    <Badge variant="outline" className="flex items-center gap-1 bg-green-50 text-green-700">
+                      <TrendingUp className="h-3 w-3" />
+                      收入: ${totals.totalIncome.toFixed(2)}
+                    </Badge>
                   </div>
                 </div>
 
-                {/* 有效交易预览 */}
+                {/* 有效交易完整列表 */}
                 {validTransactions.length > 0 && (
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-medium text-green-600">有效交易</h5>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {validTransactions.slice(0, 10).map((transaction, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm p-2 bg-green-50 rounded">
-                          <CheckCircle className="h-3 w-3 text-green-600" />
-                          <span className="font-mono">{transaction.date}</span>
-                          <span className="max-w-20 truncate">{transaction.description}</span>
-                          {transaction.description2 && (
-                            <span className="max-w-20 truncate text-gray-600">({transaction.description2})</span>
-                          )}
-                          <span className="text-red-600">-${transaction.expense.toFixed(2)}</span>
-                          <span className="text-green-600">+${transaction.income.toFixed(2)}</span>
-                          <Badge variant="outline" className="text-xs">{transaction.status}</Badge>
-                          {transaction.category && (
-                            <Badge variant="outline" className="text-xs bg-blue-100">{transaction.category}</Badge>
-                          )}
-                          {transaction.isUpdate && (
-                            <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">更新</Badge>
-                          )}
-                        </div>
-                      ))}
-                      {validTransactions.length > 10 && (
-                        <div className="text-sm text-muted-foreground">
-                          还有 {validTransactions.length - 10} 个交易...
-                        </div>
-                      )}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-sm font-medium text-green-600">有效交易记录</h5>
+                      <div className="text-sm text-muted-foreground">
+                        共 {validTransactions.length} 条记录
+                      </div>
+                    </div>
+                    
+                    <div className="border rounded-lg max-h-[400px] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white z-10">
+                          <TableRow>
+                            <TableHead className="w-[100px]">日期</TableHead>
+                            <TableHead className="w-[200px]">描述</TableHead>
+                            <TableHead className="w-[150px]">描述2</TableHead>
+                            <TableHead className="w-[100px] text-right">支出</TableHead>
+                            <TableHead className="w-[100px] text-right">收入</TableHead>
+                            <TableHead className="w-[80px]">状态</TableHead>
+                            <TableHead className="w-[100px]">分类</TableHead>
+                            <TableHead className="w-[80px]">类型</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {validTransactions.map((transaction, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-mono text-sm">
+                                {transaction.date}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate">
+                                {transaction.description}
+                              </TableCell>
+                              <TableCell className="max-w-[150px] truncate text-muted-foreground">
+                                {transaction.description2 || '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                <span className="text-red-600">
+                                  {transaction.expense > 0 ? `-$${transaction.expense.toFixed(2)}` : '-'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                <span className="text-green-600">
+                                  {transaction.income > 0 ? `+$${transaction.income.toFixed(2)}` : '-'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {transaction.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {transaction.category ? (
+                                  <Badge variant="outline" className="text-xs bg-blue-100">
+                                    {transaction.category}
+                                  </Badge>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {transaction.isUpdate ? (
+                                  <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                                    更新
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="default" className="text-xs bg-green-100 text-green-800">
+                                    新增
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
                 )}

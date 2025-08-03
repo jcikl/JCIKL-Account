@@ -61,6 +61,7 @@ export interface Transaction {
   status: "Completed" | "Pending" | "Draft"
   projectid?: string // 项目户口，从 reference 改为 projectid
   category?: string
+  sequenceNumber?: number // 排列序号，用于存储到Firebase
   createdByUid: string // Track who created the transaction
 }
 
@@ -99,8 +100,7 @@ export interface Project {
   budget: number
   remaining: number
   status: "Active" | "Completed" | "On Hold"
-  startDate: string | { seconds: number; nanoseconds: number } // Support both string and Firebase timestamp
-  endDate?: string | { seconds: number; nanoseconds: number } // Support both string and Firebase timestamp
+  eventDate?: string | { seconds: number; nanoseconds: number } // Support both string and Firebase timestamp
   description?: string // 项目描述
   assignedToUid?: string // Track project chairman
   createdAt?: string // 创建时间

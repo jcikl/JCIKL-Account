@@ -34,7 +34,7 @@ type ProjectImportFormData = z.infer<typeof projectImportFormSchema>
 interface ParsedProject {
   name: string
   bodCategory: keyof typeof BODCategories
-  startDate: string
+  eventDate: string
   projectid?: string
   isValid: boolean
   errors: string[]
@@ -106,13 +106,13 @@ export function ProjectImportDialog({
             throw new Error(`不支持的数据格式: ${format}`)
         }
 
-        // 验证字段数量（需要3个必需字段：项目名称、BOD分类、开始日期）
+        // 验证字段数量（需要3个必需字段：项目名称、BOD分类、活动日期）
         if (fields.length < 3) {
-          errors.push(`字段数量不足，需要至少3个字段（项目名称、BOD分类、开始日期），当前只有${fields.length}个`)
+          errors.push(`字段数量不足，需要至少3个字段（项目名称、BOD分类、活动日期），当前只有${fields.length}个`)
         }
 
         // 解析字段（只取前3个字段）
-        const [name, bodCategory, startDate] = fields
+        const [name, bodCategory, eventDate] = fields
 
         // 验证项目名称（转换为大写）
         const normalizedName = name ? name.trim().toUpperCase() : ''
@@ -126,9 +126,9 @@ export function ProjectImportDialog({
           errors.push(`无效的BOD分类: ${bodCategory}，有效值: ${Object.keys(BODCategories).join(', ')}`)
         }
 
-        // 验证开始日期
-        if (!startDate || !isValidDate(startDate)) {
-          errors.push(`无效的开始日期: ${startDate}`)
+        // 验证活动日期
+        if (!eventDate || !isValidDate(eventDate)) {
+          errors.push(`无效的活动日期: ${eventDate}`)
         }
 
         // 检查重复的项目名称和BOD分类组合（使用标准化的大写值）
@@ -157,7 +157,7 @@ export function ProjectImportDialog({
         return {
           name: normalizedName,
           bodCategory: (normalizedBODCategory as keyof typeof BODCategories) || 'P',
-          startDate: startDate || new Date().toISOString(),
+          eventDate: eventDate || new Date().toISOString(),
           code,
           isValid: errors.length === 0,
           errors,

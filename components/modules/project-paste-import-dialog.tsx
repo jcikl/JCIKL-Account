@@ -31,13 +31,13 @@ const projectPasteImportFormSchema = z.object({
 type ProjectPasteImportFormData = z.infer<typeof projectPasteImportFormSchema>
 
 interface ParsedProject {
+  projectYear: number
   name: string
   projectid: string
   bodCategory: BODCategory
   budget: number
   status: "Active" | "Completed" | "On Hold"
-  startDate: string
-  endDate?: string
+  eventDate?: string
   description?: string
   isValid: boolean
   errors: string[]
@@ -109,22 +109,31 @@ export function ProjectPasteImportDialog({
             fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
         }
 
-        // 检查字段数量
-        if (fields.length < 5) {
-          errors.push(`字段数量不足，需要至少5个字段，当前只有${fields.length}个`)
+        // 检查字段数量 - 新格式：项目年份,项目名称,BOD分类,预算,状态,活动日期,描述
+        // 只有前3个字段是必需的：项目年份,项目名称,BOD分类
+        if (fields.length < 3) {
+          errors.push(`字段数量不足，需要至少3个字段（项目年份,项目名称,BOD分类），当前只有${fields.length}个`)
         }
 
-        // 解析各个字段
-        const [name, projectid, bodCategoryStr, budgetStr, statusStr, startDateStr, endDateStr, description] = fields
+        // 解析各个字段 - 新格式：项目年份,项目名称,BOD分类,预算,状态,活动日期,描述
+        const [projectYearStr, name, bodCategoryStr, budgetStr, statusStr, eventDateStr, description] = fields
+
+        // 验证项目年份
+        let projectYear = new Date().getFullYear()
+        if (projectYearStr) {
+          const parsedYear = parseInt(projectYearStr)
+          if (isNaN(parsedYear) || parsedYear < 2020 || parsedYear > 2030) {
+            errors.push("项目年份无效，应在2020-2030之间")
+          } else {
+            projectYear = parsedYear
+          }
+        } else {
+          errors.push("项目年份不能为空")
+        }
 
         // 验证项目名称
         if (!name || name.trim() === "") {
           errors.push("项目名称不能为空")
-        }
-
-        // 验证项目代码
-        if (!projectid || projectid.trim() === "") {
-          errors.push("项目代码不能为空")
         }
 
         // 验证BOD分类
@@ -140,22 +149,21 @@ export function ProjectPasteImportDialog({
           }
         }
 
-        // 验证预算
+        // 验证预算（选填）
         let budget = 0
-        if (budgetStr) {
+        if (budgetStr && budgetStr.trim() !== "") {
           const parsedBudget = parseFloat(budgetStr)
           if (isNaN(parsedBudget) || parsedBudget < 0) {
             errors.push("预算金额格式无效")
           } else {
             budget = parsedBudget
           }
-        } else {
-          errors.push("预算金额不能为空")
         }
+        // 如果预算为空或无效，使用默认值0
 
-        // 验证状态
+        // 验证状态（选填）
         let status: "Active" | "Completed" | "On Hold" = "Active"
-        if (statusStr) {
+        if (statusStr && statusStr.trim() !== "") {
           const statusLower = statusStr.toLowerCase()
           if (statusLower === "active" || statusLower === "活跃" || statusLower === "进行中") {
             status = "Active"
@@ -167,48 +175,54 @@ export function ProjectPasteImportDialog({
             errors.push("状态格式无效，应为 Active/Completed/On Hold")
           }
         }
+        // 如果状态为空或无效，使用默认值"Active"
 
-        // 验证开始日期
-        let startDate = ""
-        if (startDateStr) {
-          const parsedDate = new Date(startDateStr)
+        // 验证活动日期（可选）
+        let eventDate: string | undefined = undefined
+        if (eventDateStr && eventDateStr.trim() !== "") {
+          const parsedDate = new Date(eventDateStr)
           if (isNaN(parsedDate.getTime())) {
-            errors.push("开始日期格式无效")
+            errors.push("活动日期格式无效")
           } else {
-            startDate = parsedDate.toISOString().split('T')[0]
-          }
-        } else {
-          errors.push("开始日期不能为空")
-        }
-
-        // 验证结束日期（可选）
-        let endDate: string | undefined = undefined
-        if (endDateStr && endDateStr.trim() !== "") {
-          const parsedDate = new Date(endDateStr)
-          if (isNaN(parsedDate.getTime())) {
-            errors.push("结束日期格式无效")
-          } else {
-            endDate = parsedDate.toISOString().split('T')[0]
+            eventDate = parsedDate.toISOString().split('T')[0]
           }
         }
 
-        // 检查是否为更新现有项目
+        // 自动生成项目代码
+        let projectid = ""
+        if (projectYear && name && bodCategory) {
+          const baseCode = `${projectYear}_${bodCategory}_${name}`
+          
+          // 检查代码是否已存在，如果存在则添加序号
+          let finalCode = baseCode
+          let counter = 1
+          while (existingProjects.some(p => p.projectid === finalCode)) {
+            finalCode = `${baseCode}_${counter}`
+            counter++
+          }
+          projectid = finalCode
+        }
+
+        // 检查是否为更新现有项目（基于项目名称和BOD分类）
         let isUpdate = false
-        if (updateExisting && projectid) {
-          const existingProject = existingProjects.find(p => p.projectid === projectid)
+        if (updateExisting && name && bodCategory) {
+          const existingProject = existingProjects.find(p => 
+            p.name === name && p.bodCategory === bodCategory
+          )
           if (existingProject) {
             isUpdate = true
+            projectid = existingProject.projectid // 使用现有项目的代码
           }
         }
 
         return {
+          projectYear,
           name: name || "",
-          projectid: projectid || "",
+          projectid,
           bodCategory,
           budget,
           status,
-          startDate,
-          endDate,
+          eventDate,
           description: description || "",
           isValid: errors.length === 0,
           errors,
@@ -395,17 +409,21 @@ export function ProjectPasteImportDialog({
                       </Button>
                     </div>
                     <FormControl>
-                      <Textarea
-                        placeholder="粘贴您的项目数据，格式：项目名称,项目代码,BOD分类,预算,状态,开始日期,结束日期,描述"
-                        className="min-h-[120px] font-mono text-sm"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      支持格式：项目名称,项目代码,BOD分类,预算,状态,开始日期,结束日期,描述
-                      <br />
-                      示例：年度晚宴,ANNUAL_DINNER_2024,P,50000.00,Active,2024-01-01,2024-12-31,年度会员晚宴活动
-                    </FormDescription>
+                                             <Textarea
+                         placeholder="粘贴您的项目数据，格式：项目年份,项目名称,BOD分类,预算,状态,活动日期,描述（前3个字段必需）"
+                         className="min-h-[120px] font-mono text-sm"
+                         {...field}
+                       />
+                     </FormControl>
+                     <FormDescription>
+                       支持格式：项目年份,项目名称,BOD分类,预算,状态,活动日期,描述
+                       <br />
+                       <strong>必需字段</strong>：项目年份,项目名称,BOD分类（项目代码将自动生成）
+                       <br />
+                       <strong>选填字段</strong>：预算,状态,活动日期,描述（留空使用默认值）
+                       <br />
+                       示例：2024,年度晚宴,P,50000.00,Active,2024-12-31,年度会员晚宴活动
+                     </FormDescription>
                     <FormMessage />
                   </div>
                 </FormItem>
@@ -467,6 +485,7 @@ export function ProjectPasteImportDialog({
                         <div key={index} className="flex items-center gap-2 text-sm p-2 bg-green-50 rounded">
                           <CheckCircle className="h-3 w-3 text-green-600" />
                           <span className="font-medium">{project.name}</span>
+                          <span className="text-xs text-gray-600">{project.projectYear}</span>
                           <span className="font-mono text-xs">{project.projectid}</span>
                           <span className="text-xs text-gray-600">{BODCategories[project.bodCategory]}</span>
                           <span className="text-green-600">${project.budget.toLocaleString()}</span>

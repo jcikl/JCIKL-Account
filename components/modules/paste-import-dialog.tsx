@@ -108,13 +108,37 @@ export function PasteImportDialog({
             fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
         }
 
-        // 检查字段数量
-        if (fields.length < 5) {
-          errors.push(`字段数量不足，需要至少5个字段，当前只有${fields.length}个`)
+        // 智能解析字段 - 支持多种格式
+        let dateStr, description, description2, expenseStr, incomeStr, statusStr, projectid, category
+        
+        if (fields.length >= 8) {
+          // 完整格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类
+          [dateStr, description, description2, expenseStr, incomeStr, statusStr, projectid, category] = fields
+        } else if (fields.length >= 7) {
+          // 简化格式：日期,描述,支出金额,收入金额,状态,项目户口,分类
+          [dateStr, description, expenseStr, incomeStr, statusStr, projectid, category] = fields
+          description2 = "" // 描述2为空
+        } else if (fields.length >= 5) {
+          // 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
+          [dateStr, description, description2, expenseStr, incomeStr] = fields
+          statusStr = "Pending" // 默认状态
+          projectid = "" // 默认项目户口
+          category = "" // 默认分类
+        } else {
+          // 字段严重不足的情况
+          dateStr = fields[0] || ""
+          description = fields[1] || ""
+          description2 = fields[2] || ""
+          expenseStr = fields[3] || ""
+          incomeStr = fields[4] || ""
+          statusStr = "Pending" // 默认状态
+          projectid = "" // 默认项目户口
+          category = "" // 默认分类
+          
+          if (fields.length < 3) {
+            errors.push(`字段数量严重不足，需要至少3个字段（日期、描述、支出金额），当前只有${fields.length}个`)
+          }
         }
-
-        // 解析各个字段
-        const [dateStr, description, description2, expenseStr, incomeStr, statusStr, projectid, category] = fields
 
         // 验证日期
         let date = ""
@@ -123,7 +147,11 @@ export function PasteImportDialog({
           if (isNaN(parsedDate.getTime())) {
             errors.push("日期格式无效")
           } else {
-            date = parsedDate.toISOString().split('T')[0]
+            // 使用本地时区格式化日期，避免时区偏移问题
+            const year = parsedDate.getFullYear()
+            const month = String(parsedDate.getMonth() + 1).padStart(2, '0')
+            const day = String(parsedDate.getDate()).padStart(2, '0')
+            date = `${year}-${month}-${day}`
           }
         } else {
           errors.push("日期不能为空")
@@ -213,7 +241,7 @@ export function PasteImportDialog({
     const subscription = form.watch((value, { name }) => {
       if (name === "data" || name === "format" || name === "skipHeader") {
         if (value.data && value.format) {
-          parseData(value.data, value.format, value.skipHeader || true)
+          parseData(value.data, value.format, value.skipHeader ?? true)
         }
       }
     })
@@ -383,11 +411,17 @@ export function PasteImportDialog({
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>
-                      支持格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类
-                      <br />
-                      示例：2024-01-15,办公室用品,办公用品,245.00,0.00,Pending,项目A,办公用品
-                    </FormDescription>
+                                         <FormDescription>
+                       支持多种格式：
+                       <br />
+                       • 完整格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类
+                       <br />
+                       • 简化格式：日期,描述,支出金额,收入金额,状态,项目户口,分类
+                       <br />
+                       • 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
+                       <br />
+                       示例：2024-01-15,办公室用品,办公用品,245.00,0.00,Pending,项目A,办公用品
+                     </FormDescription>
                     <FormMessage />
                   </div>
                 </FormItem>

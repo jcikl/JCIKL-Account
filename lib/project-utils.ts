@@ -5,16 +5,17 @@ import { BODCategories, type BODCategory, type Project } from "./data"
 
 /**
  * 生成项目代码
- * 格式: 年份_BOD_项目名称
+ * 格式: 项目年份_BOD_项目名称
  * 例如: 2024_P_网站开发项目 -> 2024_P_网站开发项目
  */
 export function generateProjectCode(
   projectName: string, 
   bodCategory: BODCategory, 
-  existingProjects: Project[] = []
+  existingProjects: Project[] = [],
+  projectYear?: number
 ): string {
-  const currentYear = new Date().getFullYear()
-  const baseCode = `${currentYear}_${bodCategory}_${projectName}`
+  const year = projectYear || new Date().getFullYear()
+  const baseCode = `${year}_${bodCategory}_${projectName}`
   
   // 检查代码是否已存在
   let finalCode = baseCode
@@ -32,7 +33,7 @@ export function generateProjectCode(
  * 验证项目代码格式
  */
 export function validateProjectCode(code: string): boolean {
-  // 格式: 年份_BOD_项目名称
+  // 格式: 项目年份_BOD_项目名称
   const codePattern = /^\d{4}_[A-Z_]+_.+$/
   return codePattern.test(code)
 }
@@ -141,18 +142,19 @@ export function getProjectStatsByBOD(projects: Project[]) {
 export function suggestProjectCodes(
   projectName: string,
   bodCategory: BODCategory,
-  existingProjects: Project[]
+  existingProjects: Project[],
+  projectYear?: number
 ): string[] {
   const suggestions: string[] = []
-  const currentYear = new Date().getFullYear()
+  const year = projectYear || new Date().getFullYear()
   
-  // 生成当前年份的建议
-  suggestions.push(generateProjectCode(projectName, bodCategory, existingProjects))
+  // 生成指定年份的建议
+  suggestions.push(generateProjectCode(projectName, bodCategory, existingProjects, year))
   
   // 生成下一年份的建议（如果当前接近年底）
   const currentMonth = new Date().getMonth()
   if (currentMonth >= 10) { // 11月或12月
-    const nextYear = currentYear + 1
+    const nextYear = year + 1
     const nextYearCode = `${nextYear}_${bodCategory}_${projectName}`
     if (!existingProjects.some(project => project.projectid === nextYearCode)) {
       suggestions.push(nextYearCode)

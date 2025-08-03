@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Copy, Download, FileSpreadsheet, Filter, Plus, Upload, Search, Edit, Trash2, Calendar, DollarSign, Tag, FolderOpen, Building2, CheckSquare, Square, GripVertical } from "lucide-react"
+import { Copy, Download, FileSpreadsheet, Filter, Plus, Upload, Search, Edit, Trash2, Calendar, DollarSign, Tag, FolderOpen, Building2, CheckSquare, Square, GripVertical, TrendingUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects } from "@/lib/firebase-utils"
+import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects, addTransactionWithSequence, reorderTransactions } from "@/lib/firebase-utils"
 import type { Transaction, Account, Project } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories } from "@/lib/data"
@@ -134,6 +134,9 @@ function SortableTransactionRow({
           </Button>
         </div>
       </TableCell>
+      <TableCell className="text-center font-medium text-muted-foreground">
+        {transaction.sequenceNumber || '-'}
+      </TableCell>
       <TableCell>
         {formatDate(transaction.date)}
       </TableCell>
@@ -220,6 +223,7 @@ export function BankTransactions() {
     projectid: "none",
     category: "none"
   })
+  const [batchProjectYearFilter, setBatchProjectYearFilter] = React.useState("all")
   
   // 新增表格标题行筛选状态
   const [tableDateFilter, setTableDateFilter] = React.useState("")
@@ -229,7 +233,7 @@ export function BankTransactions() {
   const [incomeFilter, setIncomeFilter] = React.useState("")
   const [balanceFilter, setBalanceFilter] = React.useState("")
   const [tableStatusFilter, setTableStatusFilter] = React.useState("all")
-  const [referenceFilter, setReferenceFilter] = React.useState("")
+  const [projectFilter, setProjectFilter] = React.useState("all")
   const [categoryFilter, setCategoryFilter] = React.useState("")
   
   // 新增年份月份过滤状态
@@ -266,19 +270,15 @@ export function BankTransactions() {
     if (!currentUser) return
 
     try {
-      // 为每个交易添加排序字段
-      for (let i = 0; i < sortedTransactions.length; i++) {
-        const transaction = sortedTransactions[i]
-        if (transaction.id) {
-          await updateDocument("transactions", transaction.id, { order: i })
-        }
-      }
+      // 使用新的序号系统保存排序
+      const sortedIds = sortedTransactions.map(t => t.id!).filter(Boolean)
+      await reorderTransactions(sortedIds)
 
       await fetchTransactions()
       setIsSortEditMode(false)
       toast({
         title: "成功",
-        description: "交易顺序已保存"
+        description: "交易顺序已保存到Firebase"
       })
     } catch (err: any) {
       toast({
@@ -315,14 +315,14 @@ export function BankTransactions() {
     setError(null)
     try {
       const fetched = await getTransactions()
-      // 按order字段排序，如果没有order字段则按日期排序
+      // 按sequenceNumber字段排序，如果没有sequenceNumber字段则按日期排序
       const sorted = fetched.sort((a, b) => {
-        const orderA = (a as any).order ?? 0
-        const orderB = (b as any).order ?? 0
-        if (orderA !== orderB) {
-          return orderA - orderB
+        const sequenceA = a.sequenceNumber ?? 0
+        const sequenceB = b.sequenceNumber ?? 0
+        if (sequenceA !== sequenceB) {
+          return sequenceA - sequenceB
         }
-        // 如果order相同，按日期排序
+        // 如果sequenceNumber相同，按日期排序
         const dateA = typeof a.date === 'string' ? new Date(a.date) : new Date(a.date.seconds * 1000)
         const dateB = typeof b.date === 'string' ? new Date(b.date) : new Date(b.date.seconds * 1000)
         return dateB.getTime() - dateA.getTime()
@@ -401,6 +401,7 @@ export function BankTransactions() {
 
 
 
+
   // Format date to "d mmm yyyy" format
   const formatDate = (date: string | { seconds: number; nanoseconds: number }): string => {
     if (typeof date === 'string') {
@@ -473,6 +474,7 @@ export function BankTransactions() {
       setSelectedTransactions(new Set())
       setIsBatchEditOpen(false)
       setBatchFormData({ projectid: "none", category: "none" })
+      setBatchProjectYearFilter("all")
       
       toast({
         title: "成功",
@@ -485,6 +487,40 @@ export function BankTransactions() {
   }
 
   // 批量删除处理
+  // 获取可用的项目年份
+  const getAvailableProjectYears = () => {
+    const years = new Set<string>()
+    projects.forEach(project => {
+      const projectYear = project.projectid.split('_')[0]
+      if (projectYear && !isNaN(parseInt(projectYear))) {
+        years.add(projectYear)
+      }
+    })
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a)) // 降序排列
+  }
+
+  // 根据年份筛选项目
+  const getFilteredProjects = () => {
+    if (batchProjectYearFilter === "all") {
+      return projects
+    }
+    return projects.filter(project => {
+      const projectYear = project.projectid.split('_')[0]
+      return projectYear === batchProjectYearFilter
+    })
+  }
+
+  // 获取可用的项目户口列表（用于筛选）
+  const getAvailableProjects = () => {
+    const projectIds = new Set<string>()
+    transactions.forEach(transaction => {
+      if (transaction.projectid && transaction.projectid.trim()) {
+        projectIds.add(transaction.projectid)
+      }
+    })
+    return Array.from(projectIds).sort()
+  }
+
   const handleBatchDelete = async () => {
     if (!currentUser || selectedTransactions.size === 0) return
 
@@ -594,10 +630,20 @@ export function BankTransactions() {
       filtered = filtered.filter(transaction => transaction.status === tableStatusFilter)
     }
 
-    if (referenceFilter) {
-      filtered = filtered.filter(transaction => 
-        transaction.projectid && transaction.projectid.toLowerCase().includes(referenceFilter.toLowerCase())
-      )
+    if (projectFilter !== "all") {
+      if (projectFilter === "-") {
+        // 筛选无项目户口的交易（projectid为空、null、undefined或"-"）
+        filtered = filtered.filter(transaction => 
+          !transaction.projectid || 
+          transaction.projectid.trim() === "" || 
+          transaction.projectid === "-"
+        )
+      } else {
+        // 筛选特定项目户口的交易
+        filtered = filtered.filter(transaction => 
+          transaction.projectid === projectFilter
+        )
+      }
     }
 
     if (categoryFilter) {
@@ -608,7 +654,7 @@ export function BankTransactions() {
 
     setFilteredTransactions(filtered)
     setSortedTransactions(filtered)
-  }, [transactions, yearFilter, monthFilter, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, referenceFilter, categoryFilter])
+  }, [transactions, yearFilter, monthFilter, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, projectFilter, categoryFilter])
 
   const resetForm = () => {
     setFormData({
@@ -711,10 +757,11 @@ export function BankTransactions() {
           description: "交易已更新"
         })
       } else {
-        await addDocument("transactions", transactionData)
+        // 使用新的序号系统添加交易
+        await addTransactionWithSequence(transactionData)
         toast({
           title: "成功",
-          description: "交易已添加"
+          description: "交易已添加并分配序号"
         })
       }
 
@@ -879,13 +926,14 @@ export function BankTransactions() {
 
     try {
       for (const data of newTransactionsData) {
-        await addDocument("transactions", data)
+        // 使用序号系统添加新交易
+        await addTransactionWithSequence(data)
       }
       await fetchTransactions()
       setIsImportOpen(false)
       toast({
         title: "成功",
-        description: `已导入 ${newTransactionsData.length} 笔交易`
+        description: `已导入 ${newTransactionsData.length} 笔交易并分配序号`
       })
     } catch (err: any) {
       setError("导入交易失败: " + err.message)
@@ -942,15 +990,28 @@ export function BankTransactions() {
             const parts = dateStr.split('/')
             date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]))
           }
+          // 处理 "DD Mon YYYY" 格式 (如 "1 Jul 2023")
+          else if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(dateStr)) {
+            date = new Date(dateStr)
+          }
           // 尝试通用解析
           else {
             date = new Date(dateStr)
           }
           
           if (date && !isNaN(date.getTime())) {
-            dateStr = date.toISOString().split("T")[0] // 格式化为 yyyy-mm-dd
+            // 使用本地时区格式化日期，避免时区偏移问题
+            const year = date.getFullYear()
+            const month = String(date.getMonth() + 1).padStart(2, '0')
+            const day = String(date.getDate()).padStart(2, '0')
+            dateStr = `${year}-${month}-${day}`
           } else {
-            dateStr = new Date().toISOString().split("T")[0] // 使用当前日期作为默认值
+            // 使用当前日期作为默认值
+            const now = new Date()
+            const year = now.getFullYear()
+            const month = String(now.getMonth() + 1).padStart(2, '0')
+            const day = String(now.getDate()).padStart(2, '0')
+            dateStr = `${year}-${month}-${day}`
           }
         }
         
@@ -992,7 +1053,8 @@ export function BankTransactions() {
             updatedCount++
           }
         } else {
-          await addDocument("transactions", transactionData)
+          // 使用序号系统添加新交易
+          await addTransactionWithSequence(transactionData)
           addedCount++
         }
       }
@@ -1056,7 +1118,38 @@ export function BankTransactions() {
   
   // 计算累计余额 (假设初始余额为0，可以通过设置调整)
   const initialBalance = 38887.57  // 可以从设置或配置中获取
-  const runningBalance = calculateRunningBalance(filteredTransactions, initialBalance)
+  
+  // 计算所有有效交易的累计余额（不受筛选影响，按日期顺序从最旧到最新）
+  const sortedAllTransactions = [...transactions].sort((a, b) => {
+    const dateA = typeof a.date === 'string' ? new Date(a.date).getTime() : new Date(a.date.seconds * 1000).getTime()
+    const dateB = typeof b.date === 'string' ? new Date(b.date).getTime() : new Date(b.date.seconds * 1000).getTime()
+    return dateA - dateB // 从最旧到最新排序
+  })
+  
+  // 计算所有交易的总收入和总支出
+  const allTransactionsTotalIncome = transactions.reduce((sum, t) => sum + t.income, 0)
+  const allTransactionsTotalExpenses = transactions.reduce((sum, t) => sum + t.expense, 0)
+  const totalNetAmount = allTransactionsTotalIncome - allTransactionsTotalExpenses
+  
+  // 计算所有交易按时间顺序的累计余额
+  const totalRunningBalance = calculateRunningBalance(sortedAllTransactions, initialBalance)
+  
+  // 缓存累计余额计算结果（性能优化）
+  const runningBalancesCache = React.useMemo(() => {
+    return calculateRunningBalances(sortedAllTransactions, initialBalance)
+  }, [sortedAllTransactions, initialBalance])
+
+  // 获取交易的累计余额（从缓存中）
+  const getRunningBalance = React.useCallback((transactionId: string): number => {
+    const cached = runningBalancesCache.find(item => item.transaction.id === transactionId)
+    return cached ? cached.runningBalance : 0
+  }, [runningBalancesCache])
+  
+  // 验证计算一致性
+  const expectedRunningBalance = initialBalance + totalNetAmount
+  if (Math.abs(totalRunningBalance - expectedRunningBalance) > 0.01) {
+    console.warn('累计余额计算不一致:', { totalRunningBalance, expectedRunningBalance })
+  }
 
   if (loading) {
     return <div className="p-6 text-center">加载银行交易...</div>
@@ -1136,7 +1229,7 @@ export function BankTransactions() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">总支出</CardTitle>
@@ -1157,15 +1250,29 @@ export function BankTransactions() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">盈余/赤字</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${netAmount >= 0 ? '+' : ''}${netAmount.toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {netAmount >= 0 ? '盈余' : '赤字'}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">累计余额</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${runningBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${runningBalance.toFixed(2)}
+            <div className={`text-2xl font-bold ${totalRunningBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${totalRunningBalance.toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              初始余额: ${initialBalance.toFixed(2)} • 净额: ${netAmount.toFixed(2)}
+              初始余额: ${initialBalance.toFixed(2)} • 净额: ${totalNetAmount.toFixed(2)}
             </p>
           </CardContent>
         </Card>
@@ -1336,15 +1443,15 @@ export function BankTransactions() {
                       </Button>
                     </div>
                   </TableHead>
+                  <TableHead className="w-[60px]">
+                    <div className="space-y-2">
+                      <div className="font-medium">序号</div>
+                    </div>
+                  </TableHead>
                   <TableHead>
             <div className="space-y-2">
                       <div className="font-medium">日期</div>
-                <Input
-                        placeholder="筛选日期..."
-                        value={tableDateFilter}
-                        onChange={(e) => setTableDateFilter(e.target.value)}
-                        className="h-6 text-xs"
-                />
+                
               </div>
                   </TableHead>
                   <TableHead>
@@ -1421,12 +1528,20 @@ export function BankTransactions() {
                   <TableHead>
             <div className="space-y-2">
                       <div className="font-medium">项目户口</div>
-                      <Input
-                        placeholder="筛选项目户口..."
-                        value={referenceFilter}
-                        onChange={(e) => setReferenceFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
+                      <Select value={projectFilter} onValueChange={setProjectFilter}>
+                        <SelectTrigger className="h-6 text-xs">
+                          <SelectValue placeholder="选择项目户口" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">所有项目户口</SelectItem>
+                          <SelectItem value="-">无项目户口</SelectItem>
+                          {getAvailableProjects().map((projectId) => (
+                            <SelectItem key={projectId} value={projectId}>
+                              {projectId}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
             </div>
                   </TableHead>
                   <TableHead>
@@ -1457,10 +1572,11 @@ export function BankTransactions() {
                       items={sortedTransactions.map(t => t.id!)}
                       strategy={verticalListSortingStrategy}
                     >
-                    {(() => {
-                      // 计算每笔交易后的累计余额
-                      const runningBalances = calculateRunningBalances(sortedTransactions, initialBalance)
-                      return runningBalances.map(({ transaction, runningBalance }) => (
+                    {sortedTransactions.map((transaction, index) => {
+                      // 使用缓存的累计余额（性能优化）
+                      const runningBalance = getRunningBalance(transaction.id!)
+                      
+                      return (
                         <SortableTransactionRow 
                           key={transaction.id} 
                           transaction={transaction} 
@@ -1473,16 +1589,17 @@ export function BankTransactions() {
                           formatDate={formatDate}
                           isSortEditMode={isSortEditMode}
                         />
-                      ))
-                    })()}
+                      )
+                    })}
                     </SortableContext>
                   </DndContext>
                 ) : (
                   <>
-                    {(() => {
-                      // 计算每笔交易后的累计余额
-                      const runningBalances = calculateRunningBalances(sortedTransactions, initialBalance)
-                      return runningBalances.map(({ transaction, runningBalance }) => (
+                    {sortedTransactions.map((transaction, index) => {
+                      // 使用缓存的累计余额（性能优化）
+                      const runningBalance = getRunningBalance(transaction.id!)
+                      
+                      return (
                         <SortableTransactionRow 
                           key={transaction.id} 
                           transaction={transaction} 
@@ -1495,8 +1612,8 @@ export function BankTransactions() {
                           formatDate={formatDate}
                           isSortEditMode={isSortEditMode}
                         />
-                      ))
-                    })()}
+                      )
+                    })}
                   </>
                 )}
               </TableBody>
@@ -1515,6 +1632,23 @@ export function BankTransactions() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="batch-project-year">项目年份筛选</Label>
+              <Select value={batchProjectYearFilter} onValueChange={(value) => 
+                setBatchProjectYearFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择项目年份" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">所有年份</SelectItem>
+                  {getAvailableProjectYears().map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}年
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="batch-reference">项目户口</Label>
               <Select value={batchFormData.projectid} onValueChange={(value) => 
                 setBatchFormData({ ...batchFormData, projectid: value })}>
@@ -1524,7 +1658,7 @@ export function BankTransactions() {
                 <SelectContent>
                   <SelectItem value="none">保持不变</SelectItem>
                   <SelectItem value="empty">无项目</SelectItem>
-                  {projects.map((project) => (
+                  {getFilteredProjects().map((project) => (
                     <SelectItem key={project.id} value={project.name}>
                       {project.name} ({project.projectid})
                     </SelectItem>
@@ -1553,7 +1687,10 @@ export function BankTransactions() {
               </Select>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsBatchEditOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setIsBatchEditOpen(false)
+                setBatchProjectYearFilter("all")
+              }}>
                 取消
               </Button>
               <Button onClick={handleBatchUpdate}>

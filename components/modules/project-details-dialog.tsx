@@ -332,13 +332,9 @@ export function ProjectDetailsDialog({
                   </Badge>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">开始日期</Label>
-                  <p className="text-sm text-muted-foreground">{formatProjectDate(project.startDate)}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">结束日期</Label>
+                  <Label className="text-sm font-medium">活动日期</Label>
                   <p className="text-sm text-muted-foreground">
-                    {project.endDate ? formatProjectDate(project.endDate) : "未设置"}
+                    {project.eventDate ? formatProjectDate(project.eventDate) : "未设置"}
                   </p>
                 </div>
                 <div>
