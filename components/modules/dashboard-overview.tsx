@@ -35,7 +35,7 @@ export function DashboardOverview() {
             const spent = await getProjectSpentAmount(project.id!)
             spentAmounts[project.id!] = spent
           } catch (error) {
-            console.error(`Error calculating spent amount for project ${project.id}:`, error)
+            //console.error(`Error calculating spent amount for project ${project.id}:`, error)
             spentAmounts[project.id!] = 0
           }
         }

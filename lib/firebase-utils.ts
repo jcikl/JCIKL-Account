@@ -42,83 +42,83 @@ export async function deleteDocument(collectionName: string, id: string): Promis
 // Account-specific operations
 export async function checkAccountCodeExists(code: string): Promise<boolean> {
   try {
-    console.log('Checking if account code exists:', code)
+    // console.log('Checking if account code exists:', code)
     const q = query(collection(db, "accounts"), where("code", "==", code))
     const querySnapshot = await getDocs(q)
     const exists = !querySnapshot.empty
-    console.log(`Account code ${code} exists: ${exists}`)
+    // console.log(`Account code ${code} exists: ${exists}`)
     return exists
   } catch (error) {
-    console.error('Error checking account code existence:', error)
+    // console.error('Error checking account code existence:', error)
     throw new Error(`Failed to check account code existence: ${error}`)
   }
 }
 
 export async function addAccount(accountData: Omit<Account, "id">): Promise<string> {
   try {
-    console.log('Adding account to Firebase:', accountData)
+    // console.log('Adding account to Firebase:', accountData)
     
     const docRef = await addDoc(collection(db, "accounts"), {
       ...accountData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })
-    console.log('Account added successfully with ID:', docRef.id)
+    // console.log('Account added successfully with ID:', docRef.id)
     return docRef.id
   } catch (error) {
-    console.error('Error adding account:', error)
+    // console.error('Error adding account:', error)
     throw new Error(`Failed to add account: ${error}`)
   }
 }
 
 export async function updateAccount(id: string, accountData: Partial<Omit<Account, "id">>): Promise<void> {
   try {
-    console.log('Updating account in Firebase:', { id, accountData })
+    // console.log('Updating account in Firebase:', { id, accountData })
     const docRef = doc(db, "accounts", id)
     await updateDoc(docRef, {
       ...accountData,
       updatedAt: new Date().toISOString()
     })
-    console.log('Account updated successfully')
+    // console.log('Account updated successfully')
   } catch (error) {
-    console.error('Error updating account:', error)
+    // console.error('Error updating account:', error)
     throw new Error(`Failed to update account: ${error}`)
   }
 }
 
 export async function deleteAccount(id: string): Promise<void> {
   try {
-    console.log('Deleting account from Firebase:', id)
+    // console.log('Deleting account from Firebase:', id)
     const docRef = doc(db, "accounts", id)
     await deleteDoc(docRef)
-    console.log('Account deleted successfully')
+    // console.log('Account deleted successfully')
   } catch (error) {
-    console.error('Error deleting account:', error)
+    // console.error('Error deleting account:', error)
     throw new Error(`Failed to delete account: ${error}`)
   }
 }
 
 export async function getAccountById(id: string): Promise<Account | null> {
   try {
-    console.log('Getting account by ID:', id)
+    // console.log('Getting account by ID:', id)
     const docRef = doc(db, "accounts", id)
     const docSnap = await getDoc(docRef)
     if (docSnap.exists()) {
       const account = { id: docSnap.id, ...docSnap.data() } as Account
-      console.log('Account found:', account)
+      // console.log('Account found:', account)
       return account
     }
-    console.log('Account not found')
+    // console.log('Account not found')
     return null
   } catch (error) {
-    console.error('Error getting account:', error)
+    // console.error('Error getting account:', error)
     throw new Error(`Failed to get account: ${error}`)
   }
 }
 
 export async function getAccountsByType(type: Account["type"]): Promise<Account[]> {
   try {
-    console.log('Getting accounts by type:', type)
+    // console.log('Getting accounts by type:', type)
     const q = query(
       collection(db, "accounts"),
       where("type", "==", type),
@@ -126,17 +126,17 @@ export async function getAccountsByType(type: Account["type"]): Promise<Account[
     )
     const querySnapshot = await getDocs(q)
     const accounts = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Account)
-    console.log(`Found ${accounts.length} accounts of type ${type}`)
+    // console.log(`Found ${accounts.length} accounts of type ${type}`)
     return accounts
   } catch (error) {
-    console.error('Error getting accounts by type:', error)
+    // console.error('Error getting accounts by type:', error)
     throw new Error(`Failed to get accounts by type: ${error}`)
   }
 }
 
 export async function getAccountsByFinancialStatement(statement: string): Promise<Account[]> {
   try {
-    console.log('Getting accounts by financial statement:', statement)
+    // console.log('Getting accounts by financial statement:', statement)
     const q = query(
       collection(db, "accounts"),
       where("financialStatement", "==", statement),
@@ -144,17 +144,17 @@ export async function getAccountsByFinancialStatement(statement: string): Promis
     )
     const querySnapshot = await getDocs(q)
     const accounts = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Account)
-    console.log(`Found ${accounts.length} accounts for ${statement}`)
+    // console.log(`Found ${accounts.length} accounts for ${statement}`)
     return accounts
   } catch (error) {
-    console.error('Error getting accounts by financial statement:', error)
+    // console.error('Error getting accounts by financial statement:', error)
     throw new Error(`Failed to get accounts by financial statement: ${error}`)
   }
 }
 
 export async function searchAccounts(searchTerm: string): Promise<Account[]> {
   try {
-    console.log('Searching accounts with term:', searchTerm)
+    // console.log('Searching accounts with term:', searchTerm)
     // Note: Firestore doesn't support full-text search natively
     // This is a simple implementation that gets all accounts and filters client-side
     // For production, consider using Algolia or similar search service
@@ -163,10 +163,10 @@ export async function searchAccounts(searchTerm: string): Promise<Account[]> {
       account.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       account.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    console.log(`Found ${filteredAccounts.length} accounts matching "${searchTerm}"`)
+    // console.log(`Found ${filteredAccounts.length} accounts matching "${searchTerm}"`)
     return filteredAccounts
   } catch (error) {
-    console.error('Error searching accounts:', error)
+    // console.error('Error searching accounts:', error)
     throw new Error(`Failed to search accounts: ${error}`)
   }
 }
@@ -177,7 +177,7 @@ export async function getAccountsWithPagination(limitCount: number = 50, lastDoc
   hasMore: boolean
 }> {
   try {
-    console.log('Getting accounts with pagination, limit:', limitCount)
+    // console.log('Getting accounts with pagination, limit:', limitCount)
     let q = query(
       collection(db, "accounts"),
       orderBy("code", "asc"),
@@ -193,14 +193,14 @@ export async function getAccountsWithPagination(limitCount: number = 50, lastDoc
     const newLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1]
     const hasMore = querySnapshot.docs.length === limitCount
     
-    console.log(`Retrieved ${accounts.length} accounts, hasMore: ${hasMore}`)
+    // console.log(`Retrieved ${accounts.length} accounts, hasMore: ${hasMore}`)
     return {
       accounts,
       lastDoc: newLastDoc,
       hasMore
     }
   } catch (error) {
-    console.error('Error getting accounts with pagination:', error)
+    // console.error('Error getting accounts with pagination:', error)
     throw new Error(`Failed to get accounts with pagination: ${error}`)
   }
 }
@@ -212,7 +212,7 @@ export async function getTransactions(): Promise<Transaction[]> {
 
 export async function getTransactionsByStatus(status: Transaction["status"]): Promise<Transaction[]> {
   try {
-    console.log('Getting transactions by status:', status)
+    // console.log('Getting transactions by status:', status)
     const q = query(
       collection(db, "transactions"),
       where("status", "==", status),
@@ -220,17 +220,17 @@ export async function getTransactionsByStatus(status: Transaction["status"]): Pr
     )
     const querySnapshot = await getDocs(q)
     const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
-    console.log(`Found ${transactions.length} transactions with status ${status}`)
+    // console.log(`Found ${transactions.length} transactions with status ${status}`)
     return transactions
   } catch (error) {
-    console.error('Error getting transactions by status:', error)
+    // console.error('Error getting transactions by status:', error)
     throw new Error(`Failed to get transactions by status: ${error}`)
   }
 }
 
 export async function getTransactionsByCategory(category: string): Promise<Transaction[]> {
   try {
-    console.log('Getting transactions by category:', category)
+    // console.log('Getting transactions by category:', category)
     const q = query(
       collection(db, "transactions"),
       where("category", "==", category),
@@ -238,17 +238,17 @@ export async function getTransactionsByCategory(category: string): Promise<Trans
     )
     const querySnapshot = await getDocs(q)
     const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
-    console.log(`Found ${transactions.length} transactions for category ${category}`)
+    // console.log(`Found ${transactions.length} transactions for category ${category}`)
     return transactions
   } catch (error) {
-    console.error('Error getting transactions by category:', error)
+    // console.error('Error getting transactions by category:', error)
     throw new Error(`Failed to get transactions by category: ${error}`)
   }
 }
 
 export async function getTransactionsByDateRange(startDate: string, endDate: string): Promise<Transaction[]> {
   try {
-    console.log('Getting transactions by date range:', { startDate, endDate })
+    // console.log('Getting transactions by date range:', { startDate, endDate })
     const q = query(
       collection(db, "transactions"),
       where("date", ">=", startDate),
@@ -257,17 +257,17 @@ export async function getTransactionsByDateRange(startDate: string, endDate: str
     )
     const querySnapshot = await getDocs(q)
     const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
-    console.log(`Found ${transactions.length} transactions in date range`)
+    // console.log(`Found ${transactions.length} transactions in date range`)
     return transactions
   } catch (error) {
-    console.error('Error getting transactions by date range:', error)
+    // console.error('Error getting transactions by date range:', error)
     throw new Error(`Failed to get transactions by date range: ${error}`)
   }
 }
 
 export async function searchTransactions(searchTerm: string): Promise<Transaction[]> {
   try {
-    console.log('Searching transactions:', searchTerm)
+    // console.log('Searching transactions:', searchTerm)
     const q = query(collection(db, "transactions"), orderBy("date", "desc"))
     const querySnapshot = await getDocs(q)
     const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
@@ -280,10 +280,10 @@ export async function searchTransactions(searchTerm: string): Promise<Transactio
       (transaction.category && transaction.category.toLowerCase().includes(searchTerm.toLowerCase()))
     )
     
-    console.log(`Found ${filtered.length} transactions matching search term`)
+    // console.log(`Found ${filtered.length} transactions matching search term`)
     return filtered
   } catch (error) {
-    console.error('Error searching transactions:', error)
+    // console.error('Error searching transactions:', error)
     throw new Error(`Failed to search transactions: ${error}`)
   }
 }
@@ -298,7 +298,7 @@ export async function getTransactionStats(): Promise<{
   netAmount: number
 }> {
   try {
-    console.log('Getting transaction statistics')
+    // console.log('Getting transaction statistics')
     const transactions = await getTransactions()
     
     const stats = {
@@ -313,21 +313,21 @@ export async function getTransactionStats(): Promise<{
     
     stats.netAmount = stats.totalIncome - stats.totalExpenses
     
-    console.log('Transaction statistics:', stats)
+    // console.log('Transaction statistics:', stats)
     return stats
   } catch (error) {
-    console.error('Error getting transaction statistics:', error)
+    // console.error('Error getting transaction statistics:', error)
     throw new Error(`Failed to get transaction statistics: ${error}`)
   }
 }
 
 export async function getAccounts(): Promise<Account[]> {
   try {
-    console.log('Getting all accounts from Firebase')
+    // console.log('Getting all accounts from Firebase')
     const q = query(collection(db, "accounts"), orderBy("code", "asc"))
     const querySnapshot = await getDocs(q)
     const accounts = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Account)
-    console.log(`Retrieved ${accounts.length} accounts from Firebase`)
+    // console.log(`Retrieved ${accounts.length} accounts from Firebase`)
     return accounts
   } catch (error) {
     console.error('Error getting accounts:', error)
@@ -342,7 +342,7 @@ export async function getProjects(): Promise<Project[]> {
 // 添加项目相关的CRUD操作
 export async function addProject(projectData: Omit<Project, "id">): Promise<string> {
   try {
-    console.log('Adding project to Firebase:', projectData)
+    // console.log('Adding project to Firebase:', projectData)
     
     // 过滤掉 undefined 值，避免 Firebase 错误
     const cleanProjectData = Object.fromEntries(
@@ -354,7 +354,7 @@ export async function addProject(projectData: Omit<Project, "id">): Promise<stri
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })
-    console.log('Project added successfully with ID:', docRef.id)
+    // console.log('Project added successfully with ID:', docRef.id)
     return docRef.id
   } catch (error) {
     console.error('Error adding project:', error)
@@ -364,7 +364,7 @@ export async function addProject(projectData: Omit<Project, "id">): Promise<stri
 
 export async function updateProject(id: string, projectData: Partial<Omit<Project, "id">>): Promise<void> {
   try {
-    console.log('Updating project in Firebase:', { id, projectData })
+    // console.log('Updating project in Firebase:', { id, projectData })
     
     // 过滤掉 undefined 值，避免 Firebase 错误
     const cleanProjectData = Object.fromEntries(
@@ -376,7 +376,7 @@ export async function updateProject(id: string, projectData: Partial<Omit<Projec
       ...cleanProjectData,
       updatedAt: new Date().toISOString()
     })
-    console.log('Project updated successfully')
+    // console.log('Project updated successfully')
   } catch (error) {
     console.error('Error updating project:', error)
     throw new Error(`Failed to update project: ${error}`)
@@ -385,10 +385,10 @@ export async function updateProject(id: string, projectData: Partial<Omit<Projec
 
 export async function deleteProject(id: string): Promise<void> {
   try {
-    console.log('Deleting project from Firebase:', id)
+    // console.log('Deleting project from Firebase:', id)
     const docRef = doc(db, "projects", id)
     await deleteDoc(docRef)
-    console.log('Project deleted successfully')
+    // console.log('Project deleted successfully')
   } catch (error) {
     console.error('Error deleting project:', error)
     throw new Error(`Failed to delete project: ${error}`)
@@ -397,15 +397,15 @@ export async function deleteProject(id: string): Promise<void> {
 
 export async function getProjectById(id: string): Promise<Project | null> {
   try {
-    console.log('Getting project by ID:', id)
+    // console.log('Getting project by ID:', id)
     const docRef = doc(db, "projects", id)
     const docSnap = await getDoc(docRef)
     if (docSnap.exists()) {
       const project = { id: docSnap.id, ...docSnap.data() } as Project
-      console.log('Project found:', project)
+      // console.log('Project found:', project)
       return project
     }
-    console.log('Project not found')
+    // console.log('Project not found')
     return null
   } catch (error) {
     console.error('Error getting project:', error)
@@ -415,7 +415,7 @@ export async function getProjectById(id: string): Promise<Project | null> {
 
 export async function getProjectsByStatus(status: Project["status"]): Promise<Project[]> {
   try {
-    console.log('Getting projects by status:', status)
+    // console.log('Getting projects by status:', status)
     const q = query(
       collection(db, "projects"),
       where("status", "==", status),
@@ -423,7 +423,7 @@ export async function getProjectsByStatus(status: Project["status"]): Promise<Pr
     )
     const querySnapshot = await getDocs(q)
     const projects = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Project)
-    console.log(`Found ${projects.length} projects with status ${status}`)
+    // console.log(`Found ${projects.length} projects with status ${status}`)
     return projects
   } catch (error) {
     console.error('Error getting projects by status:', error)
@@ -433,7 +433,7 @@ export async function getProjectsByStatus(status: Project["status"]): Promise<Pr
 
 export async function getProjectsByUser(uid: string): Promise<Project[]> {
   try {
-    console.log('Getting projects by user:', uid)
+    // console.log('Getting projects by user:', uid)
     const q = query(
       collection(db, "projects"),
       where("assignedToUid", "==", uid),
@@ -441,7 +441,7 @@ export async function getProjectsByUser(uid: string): Promise<Project[]> {
     )
     const querySnapshot = await getDocs(q)
     const projects = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Project)
-    console.log(`Found ${projects.length} projects assigned to user ${uid}`)
+    // console.log(`Found ${projects.length} projects assigned to user ${uid}`)
     return projects
   } catch (error) {
     console.error('Error getting projects by user:', error)
@@ -451,13 +451,13 @@ export async function getProjectsByUser(uid: string): Promise<Project[]> {
 
 export async function searchProjects(searchTerm: string): Promise<Project[]> {
   try {
-    console.log('Searching projects with term:', searchTerm)
+    // console.log('Searching projects with term:', searchTerm)
     const allProjects = await getProjects()
     const filteredProjects = allProjects.filter(project => 
       project.projectid.toLowerCase().includes(searchTerm.toLowerCase()) ||
       project.name.toLowerCase().includes(searchTerm.toLowerCase())
     )
-    console.log(`Found ${filteredProjects.length} projects matching "${searchTerm}"`)
+    // console.log(`Found ${filteredProjects.length} projects matching "${searchTerm}"`)
     return filteredProjects
   } catch (error) {
     console.error('Error searching projects:', error)
@@ -488,7 +488,7 @@ export async function getUserByUid(uid: string): Promise<UserProfile | null> {
 // 新增：按BOD分类获取项目
 export async function getProjectsByBOD(bodCategory: string): Promise<Project[]> {
   try {
-    console.log('Getting projects by BOD category:', bodCategory)
+    // console.log('Getting projects by BOD category:', bodCategory)
     const q = query(
       collection(db, "projects"),
       where("bodCategory", "==", bodCategory),
@@ -496,7 +496,7 @@ export async function getProjectsByBOD(bodCategory: string): Promise<Project[]> 
     )
     const querySnapshot = await getDocs(q)
     const projects = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Project)
-    console.log(`Found ${projects.length} projects in BOD category ${bodCategory}`)
+    // console.log(`Found ${projects.length} projects in BOD category ${bodCategory}`)
     return projects
   } catch (error) {
     console.error('Error getting projects by BOD category:', error)
@@ -507,11 +507,11 @@ export async function getProjectsByBOD(bodCategory: string): Promise<Project[]> 
 // 新增：检查项目代码是否存在
 export async function checkProjectCodeExists(code: string): Promise<boolean> {
   try {
-    console.log('Checking if project code exists:', code)
+    // console.log('Checking if project code exists:', code)
     const q = query(collection(db, "projects"), where("projectid", "==", code))
     const querySnapshot = await getDocs(q)
     const exists = !querySnapshot.empty
-    console.log(`Project code ${code} exists: ${exists}`)
+    // console.log(`Project code ${code} exists: ${exists}`)
     return exists
   } catch (error) {
     console.error('Error checking project code existence:', error)
@@ -530,7 +530,7 @@ export async function getProjectStats(): Promise<{
   totalRemaining: number
 }> {
   try {
-    console.log('Getting project statistics')
+    // console.log('Getting project statistics')
     const projects = await getProjects()
     
     // 计算每个项目的已花费金额
@@ -551,7 +551,7 @@ export async function getProjectStats(): Promise<{
       totalRemaining: projects.reduce((sum, p) => sum + p.remaining, 0)
     }
     
-    console.log('Project statistics:', stats)
+    // console.log('Project statistics:', stats)
     return stats
   } catch (error) {
     console.error('Error getting project statistics:', error)
@@ -562,12 +562,12 @@ export async function getProjectStats(): Promise<{
 // 新增：计算项目的已花费金额
 export async function getProjectSpentAmount(projectId: string): Promise<number> {
   try {
-    console.log('Calculating spent amount for project:', projectId)
+    //console.log('Calculating spent amount for project:', projectId)
     
     // 获取项目信息
     const project = await getProjectById(projectId)
     if (!project) {
-      console.log('Project not found:', projectId)
+      // console.log('Project not found:', projectId)
       return 0
     }
     
@@ -594,7 +594,7 @@ export async function getProjectSpentAmount(projectId: string): Promise<number> 
     // 计算总支出
     const totalSpent = projectTransactions.reduce((sum, transaction) => sum + transaction.expense, 0)
     
-    console.log(`Project ${project.name} spent amount: $${totalSpent}`)
+    // console.log(`Project ${project.name} spent amount: $${totalSpent}`)
     return totalSpent
   } catch (error) {
     console.error('Error calculating project spent amount:', error)
@@ -617,7 +617,7 @@ export async function getProjectsWithPagination(
   hasMore: boolean
 }> {
   try {
-    console.log('Getting projects with pagination:', { limitCount, filters })
+    // console.log('Getting projects with pagination:', { limitCount, filters })
     
     let q = query(collection(db, "projects"), orderBy("startDate", "desc"), limit(limitCount))
     
@@ -640,7 +640,7 @@ export async function getProjectsWithPagination(
     const hasMore = querySnapshot.docs.length === limitCount
     const newLastDoc = hasMore ? querySnapshot.docs[querySnapshot.docs.length - 1] : null
     
-    console.log(`Retrieved ${projects.length} projects, hasMore: ${hasMore}`)
+    // console.log(`Retrieved ${projects.length} projects, hasMore: ${hasMore}`)
     
     return {
       projects,
@@ -656,11 +656,11 @@ export async function getProjectsWithPagination(
 // Category-related operations
 export async function getCategories(): Promise<Category[]> {
   try {
-    console.log('Getting all categories from Firebase')
+    // console.log('Getting all categories from Firebase')
     const q = query(collection(db, "categories"), orderBy("code"))
     const querySnapshot = await getDocs(q)
     const categories = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Category)
-    console.log(`Retrieved ${categories.length} categories`)
+    // console.log(`Retrieved ${categories.length} categories`)
     return categories
   } catch (error) {
     console.error('Error getting categories:', error)
@@ -670,14 +670,14 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function addCategory(categoryData: Omit<Category, "id">): Promise<string> {
   try {
-    console.log('Adding category to Firebase:', categoryData)
+    // console.log('Adding category to Firebase:', categoryData)
     
     const docRef = await addDoc(collection(db, "categories"), {
       ...categoryData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })
-    console.log('Category added successfully with ID:', docRef.id)
+    // console.log('Category added successfully with ID:', docRef.id)
     return docRef.id
   } catch (error) {
     console.error('Error adding category:', error)
@@ -687,13 +687,13 @@ export async function addCategory(categoryData: Omit<Category, "id">): Promise<s
 
 export async function updateCategory(id: string, categoryData: Partial<Omit<Category, "id">>): Promise<void> {
   try {
-    console.log('Updating category in Firebase:', { id, categoryData })
+    // console.log('Updating category in Firebase:', { id, categoryData })
     const docRef = doc(db, "categories", id)
     await updateDoc(docRef, {
       ...categoryData,
       updatedAt: new Date().toISOString()
     })
-    console.log('Category updated successfully')
+    // console.log('Category updated successfully')
   } catch (error) {
     console.error('Error updating category:', error)
     throw new Error(`Failed to update category: ${error}`)
@@ -702,10 +702,10 @@ export async function updateCategory(id: string, categoryData: Partial<Omit<Cate
 
 export async function deleteCategory(id: string): Promise<void> {
   try {
-    console.log('Deleting category from Firebase:', id)
+    // console.log('Deleting category from Firebase:', id)
     const docRef = doc(db, "categories", id)
     await deleteDoc(docRef)
-    console.log('Category deleted successfully')
+    // console.log('Category deleted successfully')
   } catch (error) {
     console.error('Error deleting category:', error)
     throw new Error(`Failed to delete category: ${error}`)
@@ -714,11 +714,11 @@ export async function deleteCategory(id: string): Promise<void> {
 
 export async function checkCategoryCodeExists(code: string): Promise<boolean> {
   try {
-    console.log('Checking if category code exists:', code)
+    // console.log('Checking if category code exists:', code)
     const q = query(collection(db, "categories"), where("code", "==", code))
     const querySnapshot = await getDocs(q)
     const exists = !querySnapshot.empty
-    console.log(`Category code ${code} exists: ${exists}`)
+    // console.log(`Category code ${code} exists: ${exists}`)
     return exists
   } catch (error) {
     console.error('Error checking category code existence:', error)
@@ -734,7 +734,7 @@ export async function getCategoryStats(): Promise<{
   inactiveCategories: number
 }> {
   try {
-    console.log('Getting category statistics')
+    // console.log('Getting category statistics')
     const categories = await getCategories()
     
     const stats = {
@@ -745,7 +745,7 @@ export async function getCategoryStats(): Promise<{
       inactiveCategories: categories.filter(cat => !cat.isActive).length,
     }
     
-    console.log('Category statistics:', stats)
+    // console.log('Category statistics:', stats)
     return stats
   } catch (error) {
     console.error('Error getting category statistics:', error)

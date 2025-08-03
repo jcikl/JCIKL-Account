@@ -54,13 +54,13 @@ export function ProjectAccounts() {
   const { toast } = useToast()
   
   // 调试信息
-  console.log('ProjectAccounts - 当前用户:', currentUser)
-  console.log('ProjectAccounts - 用户角色:', currentUser?.role)
-  console.log('ProjectAccounts - 用户级别:', currentUser?.role ? RoleLevels[currentUser.role] : null)
-  console.log('ProjectAccounts - 导入权限 (TREASURER):', hasPermission(RoleLevels.TREASURER))
-  console.log('ProjectAccounts - 导入权限 (ASSISTANT_VICE_PRESIDENT):', hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]))
-  console.log('ProjectAccounts - 组合权限检查:', (hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) || hasPermission(RoleLevels.TREASURER)))
-  console.log('ProjectAccounts - 添加项目权限:', hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]))
+  // console.log('ProjectAccounts - 当前用户:', currentUser)
+  // console.log('ProjectAccounts - 用户角色:', currentUser?.role)
+  // console.log('ProjectAccounts - 用户级别:', currentUser?.role ? RoleLevels[currentUser.role] : null)
+  // console.log('ProjectAccounts - 导入权限 (TREASURER):', hasPermission(RoleLevels.TREASURER))
+  // console.log('ProjectAccounts - 导入权限 (ASSISTANT_VICE_PRESIDENT):', hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]))
+  // console.log('ProjectAccounts - 组合权限检查:', (hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) || hasPermission(RoleLevels.TREASURER)))
+  // console.log('ProjectAccounts - 添加项目权限:', hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]))
   const [projects, setProjects] = React.useState<Project[]>([])
   const [filteredProjects, setFilteredProjects] = React.useState<Project[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -103,14 +103,14 @@ export function ProjectAccounts() {
           const spent = await getProjectSpentAmount(project.id!)
           spentAmounts[project.id!] = spent
         } catch (error) {
-          console.error(`Error calculating spent amount for project ${project.id}:`, error)
+          // console.error(`Error calculating spent amount for project ${project.id}:`, error)
           spentAmounts[project.id!] = 0
         }
       }
       setProjectSpentAmounts(spentAmounts)
     } catch (err: any) {
       setError("无法加载项目: " + err.message)
-      console.error("Error fetching projects:", err)
+      // console.error("Error fetching projects:", err)
     } finally {
       setLoading(false)
     }
@@ -189,7 +189,7 @@ export function ProjectAccounts() {
         description: "项目已从系统中删除",
       })
     } catch (error) {
-      console.error('Error deleting project:', error)
+      // console.error('Error deleting project:', error)
       toast({
         title: "项目删除失败",
         description: `删除项目时出错: ${error}`,
@@ -245,7 +245,7 @@ export function ProjectAccounts() {
         })
       }
     } catch (error) {
-      console.error('Error saving project:', error)
+      // console.error('Error saving project:', error)
       toast({
         title: "操作失败",
         description: `保存项目时出错: ${error}`,
@@ -261,7 +261,7 @@ export function ProjectAccounts() {
   const handleImportProjects = async (importedProjects: any[]) => {
     try {
       setSaving(true)
-      console.log('批量处理项目到 Firebase...')
+      // console.log('批量处理项目到 Firebase...')
       
       let importedCount = 0
       let updatedCount = 0
@@ -282,7 +282,7 @@ export function ProjectAccounts() {
             
             await updateProject(existingProject.id!, updateData)
             updatedCount++
-            console.log(`✅ 项目已更新: ${projectData.name} - ${projectData.bodCategory}`)
+            // console.log(`✅ 项目已更新: ${projectData.name} - ${projectData.bodCategory}`)
           } else {
             // 添加新项目（只保存三个必需字段，所有数据以大写存储）
             const newProjectData = {
@@ -300,10 +300,10 @@ export function ProjectAccounts() {
             
             await addProject(newProjectData)
             importedCount++
-            console.log(`✅ 新项目已添加: ${projectData.name} - ${projectData.bodCategory}`)
+            // console.log(`✅ 新项目已添加: ${projectData.name} - ${projectData.bodCategory}`)
           }
         } catch (error) {
-          console.error(`❌ 处理项目失败: ${projectData.name}`, error)
+          // console.error(`❌ 处理项目失败: ${projectData.name}`, error)
         }
       }
       
@@ -317,7 +317,7 @@ export function ProjectAccounts() {
       
       setShowImportDialog(false)
     } catch (error) {
-      console.error('Error importing projects:', error)
+      // console.error('Error importing projects:', error)
       toast({
         title: "导入失败",
         description: `导入项目时出错: ${error}`,

@@ -1,4 +1,4 @@
-// lib/performance-monitor.ts
+// lib/performance-monitor-optimized.tsx
 import React from "react"
 
 interface PerformanceMetric {
@@ -14,10 +14,11 @@ interface PerformanceData {
   counts: Record<string, number>
 }
 
-class PerformanceMonitor {
+class OptimizedPerformanceMonitor {
   private metrics: PerformanceMetric[] = []
   private observers: ((data: PerformanceData) => void)[] = []
   private isMonitoring = false
+  private debugMode = process.env.NODE_ENV === 'development'
 
   // 开始监控
   start() {
@@ -36,13 +37,18 @@ class PerformanceMonitor {
     // 监控长任务
     this.monitorLongTasks()
     
-    // console.log('Performance monitoring started')
+    // 只在开发模式下输出console
+    if (this.debugMode) {
+      // console.log('Performance monitoring started')
+    }
   }
 
   // 停止监控
   stop() {
     this.isMonitoring = false
-    // console.log('Performance monitoring stopped')
+    if (this.debugMode) {
+      // console.log('Performance monitoring stopped')
+    }
   }
 
   // 添加性能指标
@@ -214,7 +220,10 @@ class PerformanceMonitor {
       try {
         callback(data)
       } catch (error) {
-        // console.error('Error in performance observer:', error)
+        // 只在开发模式下输出错误
+        if (this.debugMode) {
+          // console.error('Error in performance observer:', error)
+        }
       }
     })
   }
@@ -240,40 +249,40 @@ class PerformanceMonitor {
 }
 
 // 创建全局实例
-export const performanceMonitor = new PerformanceMonitor()
+export const optimizedPerformanceMonitor = new OptimizedPerformanceMonitor()
 
 // React Hook for performance monitoring
-export function usePerformanceMonitor() {
+export function useOptimizedPerformanceMonitor() {
   React.useEffect(() => {
-    performanceMonitor.start()
+    optimizedPerformanceMonitor.start()
     return () => {
-      performanceMonitor.stop()
+      optimizedPerformanceMonitor.stop()
     }
   }, [])
 
   const addMetric = React.useCallback((name: string, value: number, unit?: string) => {
-    performanceMonitor.addMetric(name, value, unit)
+    optimizedPerformanceMonitor.addMetric(name, value, unit)
   }, [])
 
   const getData = React.useCallback(() => {
-    return performanceMonitor.getPerformanceData()
+    return optimizedPerformanceMonitor.getPerformanceData()
   }, [])
 
   const getStats = React.useCallback((metricName: string) => {
-    return performanceMonitor.getMetricStats(metricName)
+    return optimizedPerformanceMonitor.getMetricStats(metricName)
   }, [])
 
   return {
     addMetric,
     getData,
     getStats,
-    exportReport: performanceMonitor.exportReport.bind(performanceMonitor)
+    exportReport: optimizedPerformanceMonitor.exportReport.bind(optimizedPerformanceMonitor)
   }
 }
 
-// 性能监控组件
-export function PerformanceMonitorComponent() {
-  const { getData, exportReport } = usePerformanceMonitor()
+// 优化版性能监控组件
+export function OptimizedPerformanceMonitorComponent() {
+  const { getData, exportReport } = useOptimizedPerformanceMonitor()
   const [data, setData] = React.useState<PerformanceData | null>(null)
   const [isVisible, setIsVisible] = React.useState(false)
 
@@ -289,10 +298,10 @@ export function PerformanceMonitorComponent() {
     return (
       <button
         onClick={() => setIsVisible(true)}
-        className="fixed bottom-4 right-4 bg-blue-500 text-white p-2 rounded-full shadow-lg"
-        title="显示性能监控"
+        className="fixed bottom-4 right-4 bg-green-500 text-white p-2 rounded-full shadow-lg"
+        title="显示优化版性能监控"
       >
-        📊
+        📈
       </button>
     )
   }
@@ -300,7 +309,7 @@ export function PerformanceMonitorComponent() {
   return (
     <div className="fixed bottom-4 right-4 bg-white border rounded-lg shadow-lg p-4 max-w-sm max-h-96 overflow-auto">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="font-bold">性能监控</h3>
+        <h3 className="font-bold">优化版性能监控</h3>
         <button
           onClick={() => setIsVisible(false)}
           className="text-gray-500 hover:text-gray-700"
@@ -311,6 +320,11 @@ export function PerformanceMonitorComponent() {
       
       {data && (
         <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-green-600 font-semibold">优化版</span>
+            <span className="text-xs text-gray-500">(减少console输出)</span>
+          </div>
+          
           <div>总指标数: {data.metrics.length}</div>
           <div>指标类型: {Object.keys(data.averages).length}</div>
           
@@ -328,11 +342,11 @@ export function PerformanceMonitorComponent() {
               const url = URL.createObjectURL(blob)
               const a = document.createElement('a')
               a.href = url
-              a.download = `performance-report-${new Date().toISOString().split('T')[0]}.json`
+              a.download = `optimized-performance-report-${new Date().toISOString().split('T')[0]}.json`
               a.click()
               URL.revokeObjectURL(url)
             }}
-            className="w-full mt-2 bg-blue-500 text-white p-1 rounded text-xs"
+            className="w-full mt-2 bg-green-500 text-white p-1 rounded text-xs"
           >
             导出报告
           </button>
