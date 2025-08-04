@@ -1,6 +1,6 @@
 "use client"
 
-import { AccountChart } from "@/components/modules/account-chart"
+import { AccountChartOptimized } from "@/components/modules/account-chart-optimized"
 import type { Account } from "@/lib/data"
 
 export default function AccountChartDemoPage() {
@@ -145,7 +145,7 @@ export default function AccountChartDemoPage() {
           </p>
         </div>
         
-        <AccountChart 
+        <AccountChartOptimized 
           accounts={mockAccounts}
           onAccountSelect={handleAccountSelect}
           onAccountEdit={handleAccountEdit}

@@ -21,6 +21,7 @@ import { AccountChart } from "./account-chart"
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import { Pagination } from "@/lib/pagination-utils"
 
 interface FilterState {
   dateFrom: string
@@ -45,6 +46,11 @@ export function GeneralLedger() {
   const [exportFormat, setExportFormat] = React.useState<"csv" | "excel" | "pdf">("csv")
   const [exportProgress, setExportProgress] = React.useState(0)
   const [isExporting, setIsExporting] = React.useState(false)
+
+  // 分页状态
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(20)
+  const [totalPages, setTotalPages] = React.useState(1)
 
   // 高级筛选状态
   const [filters, setFilters] = React.useState<FilterState>({
@@ -117,6 +123,31 @@ export function GeneralLedger() {
              matchesCategory && matchesAccountFilter
     })
   }, [transactions, selectedAccount, searchTerm, filters])
+
+  // 分页计算
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex)
+  
+  // 更新总页数
+  React.useEffect(() => {
+    const newTotalPages = Math.ceil(filteredTransactions.length / pageSize)
+    setTotalPages(Math.max(1, newTotalPages))
+    // 如果当前页超出范围，重置到第一页
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [filteredTransactions.length, pageSize, currentPage])
+
+  // 分页处理函数
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
 
   // 导出功能
   const exportData = async (format: "csv" | "excel" | "pdf") => {
@@ -696,7 +727,12 @@ export function GeneralLedger() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>交易历史</CardTitle>
-                  <CardDescription>所有账户的所有交易</CardDescription>
+                  <CardDescription>
+                    所有账户的所有交易
+                    <span className="text-muted-foreground ml-2">
+                      当前页: {currentPage}/{totalPages}
+                    </span>
+                  </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -738,7 +774,7 @@ export function GeneralLedger() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => (
+                  {paginatedTransactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
                         {typeof transaction.date === 'string' 
@@ -766,6 +802,25 @@ export function GeneralLedger() {
                   ))}
                 </TableBody>
               </Table>
+              
+              {/* 分页控件 */}
+              {totalPages > 1 && (
+                <div className="mt-4">
+                  <Pagination
+                    pagination={{
+                      page: currentPage,
+                      pageSize: pageSize,
+                      total: filteredTransactions.length,
+                      totalPages: totalPages
+                    }}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    pageSizeOptions={[20, 50, 100, 200]}
+                    showPageSizeSelector={true}
+                    showTotal={true}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,8 +1,8 @@
 // lib/firebase-utils.ts
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot } from "firebase/firestore"
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot, getCountFromServer, Query } from "firebase/firestore"
 import { db } from "./firebase"
 import type { Account, JournalEntry, Project, Transaction, UserProfile, Category } from "./data"
-import React from "react"
+import * as React from "react"
 
 // Generic CRUD operations
 export async function getCollection<T>(collectionName: string): Promise<T[]> {
@@ -966,7 +966,7 @@ export function useTransactionsRealtime(
 // 清理缓存函数
 export function clearCache(pattern?: string): void {
   if (pattern) {
-    for (const key of cache.keys()) {
+    for (const key of Array.from(cache.keys())) {
       if (key.includes(pattern)) {
         cache.delete(key)
       }
@@ -1038,5 +1038,331 @@ export async function addTransactionWithSequence(transactionData: Omit<Transacti
   } catch (error) {
     console.error('Error adding transaction with sequence:', error)
     throw new Error(`Failed to add transaction with sequence: ${error}`)
+  }
+}
+
+// 分页查询交易记录
+export async function getTransactionsWithOffsetPagination(
+  params: {
+    page: number
+    pageSize: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    filters?: {
+      projectid?: string
+      category?: string
+      status?: string
+      dateFrom?: string
+      dateTo?: string
+      search?: string
+    }
+  }
+): Promise<{
+  data: Transaction[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}> {
+  try {
+    const { page, pageSize, sortBy = 'date', sortOrder = 'desc', filters = {} } = params
+    
+    // 构建查询
+    let queryRef = collection(db, 'transactions')
+    let queryConstraints: any[] = []
+    
+    // 应用过滤器
+    if (filters.projectid) {
+      queryConstraints.push(where('projectid', '==', filters.projectid))
+    }
+    if (filters.category) {
+      queryConstraints.push(where('category', '==', filters.category))
+    }
+    if (filters.status) {
+      queryConstraints.push(where('status', '==', filters.status))
+    }
+    if (filters.dateFrom) {
+      queryConstraints.push(where('date', '>=', filters.dateFrom))
+    }
+    if (filters.dateTo) {
+      queryConstraints.push(where('date', '<=', filters.dateTo))
+    }
+    
+    // 应用排序
+    queryConstraints.push(orderBy(sortBy, sortOrder))
+    
+    // 创建查询
+    const q = query(queryRef, ...queryConstraints)
+    
+    // 获取总数
+    const totalSnapshot = await getCountFromServer(q)
+    const total = totalSnapshot.data().count
+    
+    // 计算分页
+    const totalPages = Math.ceil(total / pageSize)
+    const currentPage = Math.max(1, Math.min(page, totalPages))
+    const offset = (currentPage - 1) * pageSize
+    
+    // 获取分页数据
+    const snapshot = await getDocs(q)
+    
+    const transactions: Transaction[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      transactions.push({
+        id: doc.id,
+        ...data,
+        date: data.date?.toDate?.() || data.date
+      } as Transaction)
+    })
+    
+    return {
+      data: transactions,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages
+      }
+    }
+  } catch (error) {
+    console.error('获取分页交易记录失败:', error)
+    throw error
+  }
+}
+
+// 分页查询账户
+export async function getAccountsWithOffsetPagination(
+  params: {
+    page: number
+    pageSize: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    filters?: {
+      type?: string
+      financialStatement?: string
+      search?: string
+    }
+  }
+): Promise<{
+  data: Account[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}> {
+  try {
+    const { page, pageSize, sortBy = 'code', sortOrder = 'asc', filters = {} } = params
+    
+    let queryRef = collection(db, 'accounts')
+    let queryConstraints: any[] = []
+    
+    // 应用过滤器
+    if (filters.type) {
+      queryConstraints.push(where('type', '==', filters.type))
+    }
+    if (filters.financialStatement) {
+      queryConstraints.push(where('financialStatement', '==', filters.financialStatement))
+    }
+    
+    // 应用排序
+    queryConstraints.push(orderBy(sortBy, sortOrder))
+    
+    // 创建查询
+    const q = query(queryRef, ...queryConstraints)
+    
+    // 获取总数
+    const totalSnapshot = await getCountFromServer(q)
+    const total = totalSnapshot.data().count
+    
+    // 计算分页
+    const totalPages = Math.ceil(total / pageSize)
+    const currentPage = Math.max(1, Math.min(page, totalPages))
+    const offset = (currentPage - 1) * pageSize
+    
+    // 获取分页数据
+    const snapshot = await getDocs(q)
+    
+    const accounts: Account[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      accounts.push({
+        id: doc.id,
+        ...data
+      } as Account)
+    })
+    
+    return {
+      data: accounts,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages
+      }
+    }
+  } catch (error) {
+    console.error('获取分页账户失败:', error)
+    throw error
+  }
+}
+
+// 分页查询项目
+export async function getProjectsWithOffsetPagination(
+  params: {
+    page: number
+    pageSize: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    filters?: {
+      bodCategory?: string
+      status?: string
+      projectYear?: number
+      search?: string
+    }
+  }
+): Promise<{
+  data: Project[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}> {
+  try {
+    const { page, pageSize, sortBy = 'name', sortOrder = 'asc', filters = {} } = params
+    
+    let queryRef = collection(db, 'projects')
+    let queryConstraints: any[] = []
+    
+    // 应用过滤器
+    if (filters.bodCategory) {
+      queryConstraints.push(where('bodCategory', '==', filters.bodCategory))
+    }
+    if (filters.status) {
+      queryConstraints.push(where('status', '==', filters.status))
+    }
+    if (filters.projectYear) {
+      queryConstraints.push(where('projectYear', '==', filters.projectYear))
+    }
+    
+    // 应用排序
+    queryConstraints.push(orderBy(sortBy, sortOrder))
+    
+    // 创建查询
+    const q = query(queryRef, ...queryConstraints)
+    
+    // 获取总数
+    const totalSnapshot = await getCountFromServer(q)
+    const total = totalSnapshot.data().count
+    
+    // 计算分页
+    const totalPages = Math.ceil(total / pageSize)
+    const currentPage = Math.max(1, Math.min(page, totalPages))
+    const offset = (currentPage - 1) * pageSize
+    
+    // 获取分页数据
+    const snapshot = await getDocs(q)
+    
+    const projects: Project[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      projects.push({
+        id: doc.id,
+        ...data
+      } as Project)
+    })
+    
+    return {
+      data: projects,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages
+      }
+    }
+  } catch (error) {
+    console.error('获取分页项目失败:', error)
+    throw error
+  }
+}
+
+// 分页查询分类
+export async function getCategoriesWithOffsetPagination(
+  params: {
+    page: number
+    pageSize: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+    filters?: {
+      type?: string
+      search?: string
+    }
+  }
+): Promise<{
+  data: Category[]
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}> {
+  try {
+    const { page, pageSize, sortBy = 'name', sortOrder = 'asc', filters = {} } = params
+    
+    let queryRef = collection(db, 'categories')
+    let queryConstraints: any[] = []
+    
+    // 应用过滤器
+    if (filters.type) {
+      queryConstraints.push(where('type', '==', filters.type))
+    }
+    
+    // 应用排序
+    queryConstraints.push(orderBy(sortBy, sortOrder))
+    
+    // 创建查询
+    const q = query(queryRef, ...queryConstraints)
+    
+    // 获取总数
+    const totalSnapshot = await getCountFromServer(q)
+    const total = totalSnapshot.data().count
+    
+    // 计算分页
+    const totalPages = Math.ceil(total / pageSize)
+    const currentPage = Math.max(1, Math.min(page, totalPages))
+    const offset = (currentPage - 1) * pageSize
+    
+    // 获取分页数据
+    const snapshot = await getDocs(q)
+    
+    const categories: Category[] = []
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      categories.push({
+        id: doc.id,
+        ...data
+      } as Category)
+    })
+    
+    return {
+      data: categories,
+      pagination: {
+        page: currentPage,
+        pageSize,
+        total,
+        totalPages
+      }
+    }
+  } catch (error) {
+    console.error('获取分页分类失败:', error)
+    throw error
   }
 }

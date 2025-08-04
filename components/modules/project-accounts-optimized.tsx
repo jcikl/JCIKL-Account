@@ -25,6 +25,7 @@ import { ProjectDetailsDialog } from "./project-details-dialog"
 import { getProjectStatsByBOD, getBODDisplayName } from "@/lib/project-utils"
 import { useOptimizedProjects, useOptimizedProjectSpentAmounts } from "@/hooks/use-optimized-data"
 import { globalCache } from "@/lib/optimized-cache"
+import { Pagination } from "@/lib/pagination-utils"
 
 // 辅助函数：处理日期格式
 const formatProjectDate = (date: string | { seconds: number; nanoseconds: number }): string => {
@@ -67,6 +68,11 @@ export function ProjectAccountsOptimized() {
   // 状态管理
   const [filteredProjects, setFilteredProjects] = React.useState<Project[]>([])
   const [saving, setSaving] = React.useState(false)
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(20)
+  const [totalPages, setTotalPages] = React.useState(1)
   
   // 表单和对话框状态
   const [showProjectForm, setShowProjectForm] = React.useState(false)
@@ -140,6 +146,31 @@ export function ProjectAccountsOptimized() {
 
     setFilteredProjects(filtered)
   }, [projects, filters, currentUser])
+
+  // 分页计算
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex)
+  
+  // 更新总页数
+  React.useEffect(() => {
+    const newTotalPages = Math.ceil(filteredProjects.length / pageSize)
+    setTotalPages(Math.max(1, newTotalPages))
+    // 如果当前页超出范围，重置到第一页
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [filteredProjects.length, pageSize, currentPage])
+
+  // 分页处理函数
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
 
   // 处理添加项目
   const handleAddProject = () => {
@@ -585,7 +616,7 @@ export function ProjectAccountsOptimized() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProjects.map((project) => {
+                    {paginatedProjects.map((project) => {
                       const spentAmount = projectSpentAmounts?.[project.id!] || 0
                       const progressPercentage = project.budget > 0 ? (spentAmount / project.budget) * 100 : 0
                       
@@ -669,6 +700,33 @@ export function ProjectAccountsOptimized() {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   没有找到匹配的项目
+                </div>
+              )}
+              
+              {/* 分页控件 */}
+              {totalPages > 1 && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-muted-foreground">
+                      当前页: <span className="font-medium text-foreground">{currentPage}</span> / <span className="font-medium text-foreground">{totalPages}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      共 <span className="font-medium text-foreground">{filteredProjects.length}</span> 个项目
+                    </div>
+                  </div>
+                  <Pagination
+                    pagination={{
+                      page: currentPage,
+                      pageSize: pageSize,
+                      total: filteredProjects.length,
+                      totalPages: totalPages
+                    }}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    showPageSizeSelector={true}
+                    showTotal={true}
+                  />
                 </div>
               )}
             </CardContent>

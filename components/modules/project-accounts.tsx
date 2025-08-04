@@ -31,6 +31,7 @@ import { ProjectPasteImportDialog } from "./project-paste-import-dialog"
 import { ProjectDetailsDialog } from "./project-details-dialog"
 import { getProjectStatsByBOD, getBODDisplayName } from "@/lib/project-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Pagination } from "@/lib/pagination-utils"
 
 // 辅助函数：处理日期格式
 const formatProjectDate = (date: string | { seconds: number; nanoseconds: number }): string => {
@@ -85,6 +86,11 @@ export function ProjectAccounts() {
     bodCategory: "all",
     projectYear: "all"
   })
+
+  // 分页状态
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(20)
+  const [totalPages, setTotalPages] = React.useState(1)
 
   const fetchProjects = React.useCallback(async () => {
     setLoading(true)
@@ -171,6 +177,31 @@ export function ProjectAccounts() {
 
     setFilteredProjects(filtered)
   }, [projects, filters])
+
+  // 分页计算
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex)
+  
+  // 更新总页数
+  React.useEffect(() => {
+    const newTotalPages = Math.ceil(filteredProjects.length / pageSize)
+    setTotalPages(Math.max(1, newTotalPages))
+    // 如果当前页超出范围，重置到第一页
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [filteredProjects.length, pageSize, currentPage])
+
+  // 分页处理函数
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
 
   // 处理添加项目
   const handleAddProject = () => {
@@ -542,7 +573,12 @@ export function ProjectAccounts() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>所有项目 ({filteredProjects.length})</CardTitle>
-                  <CardDescription>项目预算和支出的完整概览。</CardDescription>
+                  <CardDescription>
+                    项目预算和支出的完整概览。
+                    <span className="text-muted-foreground ml-2">
+                      当前页: {currentPage}/{totalPages}
+                    </span>
+                  </CardDescription>
                 </div>
                 <div className="flex items-center space-x-2">
                   {(hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) || hasPermission(RoleLevels.TREASURER)) && (
@@ -598,7 +634,7 @@ export function ProjectAccounts() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProjects.map((project) => {
+                  {paginatedProjects.map((project) => {
                     const spentAmount = projectSpentAmounts[project.id!] || 0
                     const progressPercentage = project.budget > 0 ? (spentAmount / project.budget) * 100 : 0
                     return (
@@ -678,6 +714,33 @@ export function ProjectAccounts() {
                   })}
                 </TableBody>
               </Table>
+              
+              {/* 分页控件 */}
+              {totalPages > 1 && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-muted-foreground">
+                      当前页: <span className="font-medium text-foreground">{currentPage}</span> / <span className="font-medium text-foreground">{totalPages}</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      共 <span className="font-medium text-foreground">{filteredProjects.length}</span> 个项目
+                    </div>
+                  </div>
+                  <Pagination
+                    pagination={{
+                      page: currentPage,
+                      pageSize: pageSize,
+                      total: filteredProjects.length,
+                      totalPages: totalPages
+                    }}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                    pageSizeOptions={[10, 20, 50, 100]}
+                    showPageSizeSelector={true}
+                    showTotal={true}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

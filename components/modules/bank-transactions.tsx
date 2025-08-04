@@ -53,6 +53,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Pagination } from "@/lib/pagination-utils"
 
 
 
@@ -239,6 +240,10 @@ export function BankTransactions() {
   const [yearFilter, setYearFilter] = React.useState(new Date().getFullYear().toString())
   const [monthFilter, setMonthFilter] = React.useState("all")
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(50)
+  const [totalPages, setTotalPages] = React.useState(1)
   
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -275,6 +280,7 @@ export function BankTransactions() {
 
       await fetchTransactions()
       setIsSortEditMode(false)
+      setCurrentPage(1) // 重置到第一页
       toast({
         title: "成功",
         description: "交易顺序已保存到Firebase"
@@ -291,6 +297,7 @@ export function BankTransactions() {
   // 重置排序
   const handleResetOrder = () => {
     setSortedTransactions([...filteredTransactions])
+    setCurrentPage(1) // 重置到第一页
     toast({
       title: "已重置",
       description: "交易顺序已重置为原始顺序"
@@ -1150,6 +1157,31 @@ export function BankTransactions() {
     console.warn('累计余额计算不一致:', { totalRunningBalance, expectedRunningBalance })
   }
 
+  // 分页计算
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex)
+  
+  // 更新总页数
+  React.useEffect(() => {
+    const newTotalPages = Math.ceil(sortedTransactions.length / pageSize)
+    setTotalPages(Math.max(1, newTotalPages))
+    // 如果当前页超出范围，重置到第一页
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [sortedTransactions.length, pageSize, currentPage])
+
+  // 分页处理函数
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
+
   if (loading) {
     return <div className="p-6 text-center">加载银行交易...</div>
   }
@@ -1273,6 +1305,9 @@ export function BankTransactions() {
             <p className="text-xs text-muted-foreground mt-1">
               初始余额: ${initialBalance.toFixed(2)} • 净额: ${totalNetAmount.toFixed(2)}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              当前页: {currentPage}/{totalPages}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -1347,6 +1382,9 @@ export function BankTransactions() {
                       ({yearFilter}年{monthFilter === "all" ? "全年" : monthFilter + "月"})
                     </span>
                   )}
+                  <span className="text-muted-foreground ml-2">
+                    当前页: {currentPage}/{totalPages}
+                  </span>
                 </CardDescription>
               </div>
 
@@ -1422,201 +1460,362 @@ export function BankTransactions() {
                 </p>
               </div>
             )}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[80px]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4"></div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSelectAll}
-                        className="h-6 w-6 p-0"
-                      >
-                        {selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0 ? (
-                          <CheckSquare className="h-4 w-4" />
-                        ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-                      </Button>
+            {isSortEditMode ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sortedTransactions.map(t => t.id!)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[80px]">
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4"></div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleSelectAll}
+                              className="h-6 w-6 p-0"
+                            >
+                              {selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0 ? (
+                                <CheckSquare className="h-4 w-4" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </TableHead>
+                        <TableHead className="w-[60px]">
+                          <div className="space-y-2">
+                            <div className="font-medium">序号</div>
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                  <div className="space-y-2">
+                            <div className="font-medium">日期</div>
+                      
                     </div>
-                  </TableHead>
-                  <TableHead className="w-[60px]">
-                    <div className="space-y-2">
-                      <div className="font-medium">序号</div>
-                    </div>
-                  </TableHead>
-                  <TableHead>
-            <div className="space-y-2">
-                      <div className="font-medium">日期</div>
-                
-              </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-2">
-                      <div className="font-medium">描述</div>
-                      <Input
-                        placeholder="筛选描述..."
-                        value={descriptionFilter}
-                        onChange={(e) => setDescriptionFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-            </div>
-                  </TableHead>
-                  <TableHead>
-            <div className="space-y-2">
-                      <div className="font-medium">描述2</div>
-                      <Input
-                        placeholder="筛选描述2..."
-                        value={description2Filter}
-                        onChange={(e) => setDescription2Filter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-2">
-                      <div className="font-medium">支出金额</div>
-                      <Input
-                        placeholder="筛选支出..."
-                        value={expenseFilter}
-                        onChange={(e) => setExpenseFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-2">
-                      <div className="font-medium">收入金额</div>
-                      <Input
-                        placeholder="筛选收入..."
-                        value={incomeFilter}
-                        onChange={(e) => setIncomeFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-2">
-                      <div className="font-medium">累计余额</div>
-                      <Input
-                        placeholder="筛选余额..."
-                        value={balanceFilter}
-                        onChange={(e) => setBalanceFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-2">
-                      <div className="font-medium">状态</div>
-                      <Select value={tableStatusFilter} onValueChange={setTableStatusFilter}>
-                        <SelectTrigger className="h-6 text-xs">
-                          <SelectValue placeholder="所有状态" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">所有状态</SelectItem>
-                  <SelectItem value="Completed">已完成</SelectItem>
-                  <SelectItem value="Pending">待处理</SelectItem>
-                  <SelectItem value="Draft">草稿</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-                  </TableHead>
-                  <TableHead>
-            <div className="space-y-2">
-                      <div className="font-medium">项目户口</div>
-                      <Select value={projectFilter} onValueChange={setProjectFilter}>
-                        <SelectTrigger className="h-6 text-xs">
-                          <SelectValue placeholder="选择项目户口" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">所有项目户口</SelectItem>
-                          <SelectItem value="-">无项目户口</SelectItem>
-                          {getAvailableProjects().map((projectId) => (
-                            <SelectItem key={projectId} value={projectId}>
-                              {projectId}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-            </div>
-                  </TableHead>
-                  <TableHead>
-            <div className="space-y-2">
-                      <div className="font-medium">收支分类</div>
-                      <Input
-                        placeholder="筛选收支分类..."
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="h-6 text-xs"
-                      />
-                    </div>
-                  </TableHead>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">描述</div>
+                            <Input
+                              placeholder="筛选描述..."
+                              value={descriptionFilter}
+                              onChange={(e) => setDescriptionFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                  </div>
+                        </TableHead>
+                        <TableHead>
+                  <div className="space-y-2">
+                            <div className="font-medium">描述2</div>
+                            <Input
+                              placeholder="筛选描述2..."
+                              value={description2Filter}
+                              onChange={(e) => setDescription2Filter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">支出金额</div>
+                            <Input
+                              placeholder="筛选支出..."
+                              value={expenseFilter}
+                              onChange={(e) => setExpenseFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">收入金额</div>
+                            <Input
+                              placeholder="筛选收入..."
+                              value={incomeFilter}
+                              onChange={(e) => setIncomeFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">累计余额</div>
+                            <Input
+                              placeholder="筛选余额..."
+                              value={balanceFilter}
+                              onChange={(e) => setBalanceFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">状态</div>
+                            <Select value={tableStatusFilter} onValueChange={setTableStatusFilter}>
+                              <SelectTrigger className="h-6 text-xs">
+                                <SelectValue placeholder="所有状态" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">所有状态</SelectItem>
+                                <SelectItem value="Completed">已完成</SelectItem>
+                                <SelectItem value="Pending">待处理</SelectItem>
+                                <SelectItem value="Draft">草稿</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">项目户口</div>
+                            <Select value={projectFilter} onValueChange={setProjectFilter}>
+                              <SelectTrigger className="h-6 text-xs">
+                                <SelectValue placeholder="选择项目户口" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">所有项目户口</SelectItem>
+                                <SelectItem value="-">无项目户口</SelectItem>
+                                {getAvailableProjects().map((projectId) => (
+                                  <SelectItem key={projectId} value={projectId}>
+                                    {projectId}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
+                            <div className="font-medium">收支分类</div>
+                            <Input
+                              placeholder="筛选收支分类..."
+                              value={categoryFilter}
+                              onChange={(e) => setCategoryFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
 
-                  {hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) && (
-                    <TableHead className="w-[100px]">操作</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isSortEditMode ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={sortedTransactions.map(t => t.id!)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                    {sortedTransactions.map((transaction, index) => {
-                      // 使用缓存的累计余额（性能优化）
-                      const runningBalance = getRunningBalance(transaction.id!)
-                      
-                      return (
-                        <SortableTransactionRow 
-                          key={transaction.id} 
-                          transaction={transaction} 
-                          runningBalance={runningBalance}
-                          onSelect={handleSelectTransaction}
-                          onEdit={handleEditTransaction}
-                          onDelete={handleDeleteTransaction}
-                          hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
-                          isSelected={selectedTransactions.has(transaction.id!)}
-                          formatDate={formatDate}
-                          isSortEditMode={isSortEditMode}
+                        {hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) && (
+                          <TableHead className="w-[100px]">操作</TableHead>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedTransactions.map((transaction, index) => {
+                        const runningBalance = getRunningBalance(transaction.id!)
+                        return (
+                          <SortableTransactionRow 
+                            key={transaction.id} 
+                            transaction={transaction} 
+                            runningBalance={runningBalance}
+                            onSelect={handleSelectTransaction}
+                            onEdit={handleEditTransaction}
+                            onDelete={handleDeleteTransaction}
+                            hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
+                            isSelected={selectedTransactions.has(transaction.id!)}
+                            formatDate={formatDate}
+                            isSortEditMode={isSortEditMode}
+                          />
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4"></div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSelectAll}
+                          className="h-6 w-6 p-0"
+                        >
+                          {selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0 ? (
+                            <CheckSquare className="h-4 w-4" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[60px]">
+                      <div className="space-y-2">
+                        <div className="font-medium">序号</div>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">日期</div>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">描述</div>
+                        <Input
+                          placeholder="筛选描述..."
+                          value={descriptionFilter}
+                          onChange={(e) => setDescriptionFilter(e.target.value)}
+                          className="h-6 text-xs"
                         />
-                      )
-                    })}
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <>
-                    {sortedTransactions.map((transaction, index) => {
-                      // 使用缓存的累计余额（性能优化）
-                      const runningBalance = getRunningBalance(transaction.id!)
-                      
-                      return (
-                        <SortableTransactionRow 
-                          key={transaction.id} 
-                          transaction={transaction} 
-                          runningBalance={runningBalance}
-                          onSelect={handleSelectTransaction}
-                          onEdit={handleEditTransaction}
-                          onDelete={handleDeleteTransaction}
-                          hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
-                          isSelected={selectedTransactions.has(transaction.id!)}
-                          formatDate={formatDate}
-                          isSortEditMode={isSortEditMode}
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">描述2</div>
+                        <Input
+                          placeholder="筛选描述2..."
+                          value={description2Filter}
+                          onChange={(e) => setDescription2Filter(e.target.value)}
+                          className="h-6 text-xs"
                         />
-                      )
-                    })}
-                  </>
-                )}
-              </TableBody>
-            </Table>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">支出金额</div>
+                        <Input
+                          placeholder="筛选支出..."
+                          value={expenseFilter}
+                          onChange={(e) => setExpenseFilter(e.target.value)}
+                          className="h-6 text-xs"
+                        />
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">收入金额</div>
+                        <Input
+                          placeholder="筛选收入..."
+                          value={incomeFilter}
+                          onChange={(e) => setIncomeFilter(e.target.value)}
+                          className="h-6 text-xs"
+                        />
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">累计余额</div>
+                        <Input
+                          placeholder="筛选余额..."
+                          value={balanceFilter}
+                          onChange={(e) => setBalanceFilter(e.target.value)}
+                          className="h-6 text-xs"
+                        />
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">状态</div>
+                        <Select value={tableStatusFilter} onValueChange={setTableStatusFilter}>
+                          <SelectTrigger className="h-6 text-xs">
+                            <SelectValue placeholder="所有状态" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">所有状态</SelectItem>
+                            <SelectItem value="Completed">已完成</SelectItem>
+                            <SelectItem value="Pending">待处理</SelectItem>
+                            <SelectItem value="Draft">草稿</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">项目户口</div>
+                        <Select value={projectFilter} onValueChange={setProjectFilter}>
+                          <SelectTrigger className="h-6 text-xs">
+                            <SelectValue placeholder="选择项目户口" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">所有项目户口</SelectItem>
+                            <SelectItem value="-">无项目户口</SelectItem>
+                            {getAvailableProjects().map((projectId) => (
+                              <SelectItem key={projectId} value={projectId}>
+                                {projectId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
+                        <div className="font-medium">收支分类</div>
+                        <Input
+                          placeholder="筛选收支分类..."
+                          value={categoryFilter}
+                          onChange={(e) => setCategoryFilter(e.target.value)}
+                          className="h-6 text-xs"
+                        />
+                      </div>
+                    </TableHead>
+
+                    {hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) && (
+                      <TableHead className="w-[100px]">操作</TableHead>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedTransactions.map((transaction, index) => {
+                    const runningBalance = getRunningBalance(transaction.id!)
+                    return (
+                      <SortableTransactionRow 
+                        key={transaction.id} 
+                        transaction={transaction} 
+                        runningBalance={runningBalance}
+                        onSelect={handleSelectTransaction}
+                        onEdit={handleEditTransaction}
+                        onDelete={handleDeleteTransaction}
+                        hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
+                        isSelected={selectedTransactions.has(transaction.id!)}
+                        formatDate={formatDate}
+                        isSortEditMode={isSortEditMode}
+                      />
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            
+            {/* 分页控件 */}
+            {totalPages > 1 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-muted-foreground">
+                    当前页: <span className="font-medium text-foreground">{currentPage}</span> / <span className="font-medium text-foreground">{totalPages}</span>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    共 <span className="font-medium text-foreground">{sortedTransactions.length}</span> 笔交易
+                  </div>
+                </div>
+                <Pagination
+                  pagination={{
+                    page: currentPage,
+                    pageSize: pageSize,
+                    total: sortedTransactions.length,
+                    totalPages: totalPages
+                  }}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                  pageSizeOptions={[20, 50, 100, 200]}
+                  showPageSizeSelector={true}
+                  showTotal={true}
+                />
+              </div>
+            )}
         </CardContent>
       </Card>
 

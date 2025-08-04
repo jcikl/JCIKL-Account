@@ -29,6 +29,7 @@ interface AccountFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   account?: Account | null
+  existingAccounts?: Account[]
   onSave: (account: AccountFormData) => void
   onCancel?: () => void
 }

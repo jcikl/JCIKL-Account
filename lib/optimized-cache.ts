@@ -216,14 +216,63 @@ setInterval(() => {
 
 // 缓存键生成器
 export const cacheKeys = {
-  transactions: () => 'transactions',
-  projects: () => 'projects',
-  accounts: () => 'accounts',
+  transactions: (options?: { limit?: number; filters?: any }) => {
+    if (!options) return 'transactions'
+    const { limit, filters } = options
+    if (!filters) return `transactions:${limit || 'default'}`
+    
+    // 创建稳定的过滤器字符串
+    const filterKeys = Object.keys(filters || {}).sort()
+    const filterStr = filterKeys.map(key => {
+      const value = filters[key]
+      if (value === undefined || value === null) return ''
+      if (typeof value === 'object') {
+        return `${key}:${JSON.stringify(value)}`
+      }
+      return `${key}:${value}`
+    }).filter(Boolean).join('|')
+    
+    return `transactions:${limit || 'default'}:${filterStr}`
+  },
+  projects: (filters?: any) => {
+    if (!filters) return 'projects'
+    
+    // 创建稳定的过滤器字符串
+    const filterKeys = Object.keys(filters || {}).sort()
+    const filterStr = filterKeys.map(key => {
+      const value = filters[key]
+      if (value === undefined || value === null) return ''
+      if (typeof value === 'object') {
+        return `${key}:${JSON.stringify(value)}`
+      }
+      return `${key}:${value}`
+    }).filter(Boolean).join('|')
+    
+    return `projects:${filterStr}`
+  },
+  accounts: (filters?: any) => {
+    if (!filters) return 'accounts'
+    
+    // 创建稳定的过滤器字符串
+    const filterKeys = Object.keys(filters || {}).sort()
+    const filterStr = filterKeys.map(key => {
+      const value = filters[key]
+      if (value === undefined || value === null) return ''
+      if (typeof value === 'object') {
+        return `${key}:${JSON.stringify(value)}`
+      }
+      return `${key}:${value}`
+    }).filter(Boolean).join('|')
+    
+    return `accounts:${filterStr}`
+  },
   categories: () => 'categories',
-  projectSpentAmounts: () => 'project-spent-amounts',
+  projectSpentAmounts: (projectIds: string[]) => {
+    return `project-spent-amounts:${projectIds.sort().join(',')}`
+  },
   transactionStats: () => 'transaction-stats',
   projectStats: () => 'project-stats',
-  users: () => 'users', // 新增用户缓存键
+  users: () => 'users',
 }
 
 // 优化的数据获取Hook
@@ -239,40 +288,83 @@ export function useCachedData<T>(
   const [data, setData] = React.useState<T | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  
+  // 使用 useRef 来存储 fetcher 函数，避免无限循环
+  const fetcherRef = React.useRef(fetcher)
+  fetcherRef.current = fetcher
+
+  // 解构 options 以避免对象引用变化
+  const { ttl, preload, priority } = options
+
+  // 使用 ref 来跟踪是否正在获取数据，防止重复请求
+  const isFetchingRef = React.useRef(false)
+  
+  // 使用 ref 来跟踪组件是否已挂载，防止在卸载后设置状态
+  const isMountedRef = React.useRef(true)
+
+  // 清理函数
+  React.useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const fetchData = React.useCallback(async () => {
+    // 防止重复请求
+    if (isFetchingRef.current) {
+      return
+    }
+
+    // 检查组件是否已挂载
+    if (!isMountedRef.current) {
+      return
+    }
+
     setLoading(true)
     setError(null)
+    isFetchingRef.current = true
 
     try {
       // 先尝试从缓存获取
       const cached = globalCache.get<T>(key)
       if (cached) {
-        setData(cached)
-        setLoading(false)
+        if (isMountedRef.current) {
+          setData(cached)
+          setLoading(false)
+        }
+        isFetchingRef.current = false
         return
       }
 
       // 缓存未命中，从服务器获取
-      const result = await fetcher()
-      globalCache.set(key, result, options.ttl)
-      setData(result)
+      const result = await fetcherRef.current()
+      
+      // 检查组件是否仍然挂载
+      if (isMountedRef.current) {
+        globalCache.set(key, result, ttl)
+        setData(result)
+        setLoading(false)
+      }
     } catch (err: any) {
-      setError(err.message)
+      if (isMountedRef.current) {
+        setError(err.message)
+        setLoading(false)
+      }
       console.error(`获取数据失败: ${key}`, err)
     } finally {
-      setLoading(false)
+      isFetchingRef.current = false
     }
-  }, [key, fetcher, options.ttl])
+  }, [key, ttl])
 
   // 预加载数据
   React.useEffect(() => {
-    if (options.preload) {
-      globalCache.preload(key, fetcher, options.priority)
+    if (preload) {
+      globalCache.preload(key, fetcherRef.current, priority)
     }
-  }, [key, fetcher, options.preload, options.priority])
+  }, [key, preload, priority])
 
-  // 初始加载
+  // 初始加载 - 只在 key 或 ttl 变化时重新获取
   React.useEffect(() => {
     fetchData()
   }, [fetchData])

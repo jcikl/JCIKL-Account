@@ -1,11 +1,11 @@
 "use client"
 
-import { CategoryManagement } from "@/components/modules/category-management"
+import { CategoryManagementOptimized } from "@/components/modules/category-management-optimized"
 
 export default function CategoryDemoPage() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <CategoryManagement />
+      <CategoryManagementOptimized />
     </div>
   )
 } 

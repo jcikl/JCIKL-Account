@@ -28,7 +28,7 @@ interface AccountChartProps {
   onAccountSelect?: (account: Account) => void
   onAccountEdit?: (account: Account) => void
   onAccountDelete?: (accountId: string) => void
-  onAccountAdd?: () => void
+  onAccountAdd?: (accountData: { code: string; name: string; type: "Asset" | "Liability" | "Equity" | "Revenue" | "Expense"; balance: number; description?: string; parent?: string; }) => void
   onAccountsImport?: (accounts: Array<{
     code: string
     name: string
@@ -712,6 +712,8 @@ export function AccountChartOptimized({
       <ExportDialog
         open={showExportDialog}
         onOpenChange={setShowExportDialog}
+        accounts={displayAccounts}
+        selectedAccounts={selectedAccounts}
         onExport={handleExport}
         selectedCount={selectedAccounts.size}
         totalCount={filteredAndSortedAccounts.length}

@@ -146,7 +146,6 @@ const OptimizedModuleRenderer = React.memo(({
   hasPermission: (level: number) => boolean
   requiredLevel: number
 }) => {
-  const [isLoaded, setIsLoaded] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   // 检查权限
@@ -172,28 +171,6 @@ const OptimizedModuleRenderer = React.memo(({
   // 判断是核心模块还是懒加载模块
   const isCoreModule = ["Dashboard", "Bank Transactions", "Project Accounts"].includes(moduleName)
 
-  // 懒加载组件 - 移到顶层以避免hooks顺序问题
-  const LazyComponent = React.useMemo(() => {
-    if (isCoreModule) return null
-    
-    switch (moduleName) {
-      case "Journal Entries":
-        return JournalEntries
-      case "Trial Balance":
-        return TrialBalance
-      case "Profit & Loss":
-        return ProfitLoss
-      case "Balance Sheet":
-        return BalanceSheet
-      case "General Ledger":
-        return GeneralLedger
-      case "Account Settings":
-        return AccountSettingsOptimized
-      default:
-        return null
-    }
-  }, [moduleName, isCoreModule])
-
   // 渲染核心模块（预加载）
   if (isCoreModule) {
     switch (moduleName) {
@@ -209,6 +186,31 @@ const OptimizedModuleRenderer = React.memo(({
   }
 
   // 渲染懒加载模块
+  let LazyComponent: React.ComponentType | null = null
+  
+  switch (moduleName) {
+    case "Journal Entries":
+      LazyComponent = JournalEntries
+      break
+    case "Trial Balance":
+      LazyComponent = TrialBalance
+      break
+    case "Profit & Loss":
+      LazyComponent = ProfitLoss
+      break
+    case "Balance Sheet":
+      LazyComponent = BalanceSheet
+      break
+    case "General Ledger":
+      LazyComponent = GeneralLedger
+      break
+    case "Account Settings":
+      LazyComponent = AccountSettingsOptimized
+      break
+    default:
+      return <div className="p-6 text-center text-muted-foreground">模块未找到。</div>
+  }
+
   if (!LazyComponent) {
     return <div className="p-6 text-center text-muted-foreground">模块未找到。</div>
   }

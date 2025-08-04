@@ -18,9 +18,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { getJournalEntries, getAccounts, addDocument, type JournalEntry, type Account } from "@/lib/firebase-utils"
+import { getJournalEntries, getAccounts, addDocument } from "@/lib/firebase-utils"
+import type { JournalEntry, Account } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
+import { Pagination } from "@/lib/pagination-utils"
 
 interface JournalEntryLine {
   account: string
@@ -46,6 +48,11 @@ export function JournalEntries() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(20)
+  const [totalPages, setTotalPages] = React.useState(1)
+
   const fetchJournalData = React.useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -65,6 +72,31 @@ export function JournalEntries() {
   React.useEffect(() => {
     fetchJournalData()
   }, [fetchJournalData])
+
+  // 分页计算
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedEntries = journalEntries.slice(startIndex, endIndex)
+  
+  // 更新总页数
+  React.useEffect(() => {
+    const newTotalPages = Math.ceil(journalEntries.length / pageSize)
+    setTotalPages(Math.max(1, newTotalPages))
+    // 如果当前页超出范围，重置到第一页
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1)
+    }
+  }, [journalEntries.length, pageSize, currentPage])
+
+  // 分页处理函数
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
 
   const addEntryLine = () => {
     setEntryLines([...entryLines, { account: "", accountName: "", debit: 0, credit: 0 }])
@@ -316,7 +348,12 @@ export function JournalEntries() {
       <Card>
         <CardHeader>
           <CardTitle>日记账分录</CardTitle>
-          <CardDescription>所有日记账分录，带有双分录会计验证。</CardDescription>
+          <CardDescription>
+            所有日记账分录，带有双分录会计验证。
+            <span className="text-muted-foreground ml-2">
+              当前页: {currentPage}/{totalPages}
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -332,16 +369,16 @@ export function JournalEntries() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {journalEntries.map((entry) => {
-                const totalAmount = entry.entries.reduce((sum, line) => sum + line.debit, 0)
+              {paginatedEntries.map((entry) => {
+                const totalAmount = entry.entries.reduce((sum: number, line: any) => sum + line.debit, 0)
                 return (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">{entry.id}</TableCell>
                     <TableCell>
-                      {typeof entry.date === 'string' 
-                        ? entry.date 
-                        : entry.date?.seconds 
-                          ? new Date(entry.date.seconds * 1000).toLocaleDateString()
+                      {typeof entry.date === 'string'
+                        ? entry.date
+                        : (entry.date && typeof (entry.date as any).seconds === 'number')
+                          ? new Date((entry.date as any).seconds * 1000).toLocaleDateString()
                           : 'N/A'
                       }
                     </TableCell>
@@ -357,6 +394,25 @@ export function JournalEntries() {
               })}
             </TableBody>
           </Table>
+          
+          {/* 分页控件 */}
+          {totalPages > 1 && (
+            <div className="mt-4">
+              <Pagination
+                pagination={{
+                  page: currentPage,
+                  pageSize: pageSize,
+                  total: journalEntries.length,
+                  totalPages: totalPages
+                }}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                pageSizeOptions={[10, 20, 50, 100]}
+                showPageSizeSelector={true}
+                showTotal={true}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

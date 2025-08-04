@@ -1,6 +1,6 @@
 "use client"
 
-import { GeneralLedgerFixed } from "@/components/modules/general-ledger-fixed"
+import { GeneralLedgerOptimized } from "@/components/modules/general-ledger-optimized"
 import { TestDialog } from "@/components/test-dialog"
 
 export default function TestFilterPage() {
@@ -23,7 +23,7 @@ export default function TestFilterPage() {
         {/* 完整的总账模块测试 */}
         <div className="p-4 border rounded-lg">
           <h2 className="text-lg font-semibold mb-4">步骤2: 测试完整的总账模块</h2>
-          <GeneralLedgerFixed />
+          <GeneralLedgerOptimized />
         </div>
       </div>
     </div>

@@ -30,9 +30,12 @@ export function useOptimizedTransactions(options: {
   
   const key = cacheKeys.transactions({ limit, filters })
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getTransactionsBatch(limit, filters), [limit, filters])
+  
   return useCachedData(
     key,
-    () => getTransactionsBatch(limit, filters),
+    fetcher,
     {
       ttl: 2 * 60 * 1000, // 2分钟缓存
       preload,
@@ -55,9 +58,12 @@ export function useOptimizedProjects(options: {
   
   const key = cacheKeys.projects(filters)
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getProjects(), [])
+  
   return useCachedData(
     key,
-    () => getProjects(),
+    fetcher,
     {
       ttl: 5 * 60 * 1000, // 5分钟缓存
       preload,
@@ -79,9 +85,12 @@ export function useOptimizedAccounts(options: {
   
   const key = cacheKeys.accounts(filters)
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getAccounts(), [])
+  
   return useCachedData(
     key,
-    () => getAccounts(),
+    fetcher,
     {
       ttl: 10 * 60 * 1000, // 10分钟缓存
       preload,
@@ -99,9 +108,12 @@ export function useOptimizedCategories(options: {
   
   const key = cacheKeys.categories()
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getCategories(), [])
+  
   return useCachedData(
     key,
-    () => getCategories(),
+    fetcher,
     {
       ttl: 15 * 60 * 1000, // 15分钟缓存
       preload,
@@ -111,12 +123,15 @@ export function useOptimizedCategories(options: {
 }
 
 // 优化的项目花费金额Hook
-export function useOptimizedProjectSpentAmounts(projectIds: string[]) {
+export function useOptimizedProjectSpentAmounts(projectIds: string[] = []) {
   const key = cacheKeys.projectSpentAmounts(projectIds)
+  
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getProjectsSpentAmounts(projectIds), [projectIds])
   
   return useCachedData(
     key,
-    () => getProjectsSpentAmounts(projectIds),
+    fetcher,
     {
       ttl: 3 * 60 * 1000, // 3分钟缓存
       preload: true,
@@ -129,9 +144,12 @@ export function useOptimizedProjectSpentAmounts(projectIds: string[]) {
 export function useOptimizedTransactionStats() {
   const key = 'transaction:stats'
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getTransactionStats(), [])
+  
   return useCachedData(
     key,
-    () => getTransactionStats(),
+    fetcher,
     {
       ttl: 1 * 60 * 1000, // 1分钟缓存
       preload: true,
@@ -144,9 +162,12 @@ export function useOptimizedTransactionStats() {
 export function useOptimizedProjectStats() {
   const key = 'project:stats'
   
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getProjectStats(), [])
+  
   return useCachedData(
     key,
-    () => getProjectStats(),
+    fetcher,
     {
       ttl: 2 * 60 * 1000, // 2分钟缓存
       preload: true,
@@ -157,9 +178,12 @@ export function useOptimizedProjectStats() {
 
 // 新增：用户数据优化 hooks
 export function useOptimizedUsers() {
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getUsers(), [])
+  
   return useCachedData(
     cacheKeys.users(),
-    () => getUsers(),
+    fetcher,
     { ttl: 5 * 60 * 1000, preload: true, priority: 'medium' }
   )
 }

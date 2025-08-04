@@ -29,6 +29,8 @@ interface ExportDialogProps {
   onOpenChange: (open: boolean) => void
   accounts: Account[]
   selectedAccounts: Set<string>
+  selectedCount?: number
+  totalCount?: number
   onExport: (data: ExportFormData) => void
 }
 
