@@ -261,7 +261,7 @@ export function DashboardOverviewOptimized() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-4 md:grid-cols-4">
         {dashboardStats.map((stat, index) => (
           <StatCard key={index} {...stat} />
         ))}

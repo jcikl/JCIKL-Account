@@ -809,7 +809,7 @@ export function GeneralLedger() {
         </TabsContent>
 
         <TabsContent value="summary" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
             {["Asset", "Liability", "Equity", "Revenue", "Expense"].map((type) => {
               const accountsOfType = accounts.filter((account) => account.type === type)
               const totalBalance = accountsOfType.reduce((sum, account) => sum + account.balance, 0)

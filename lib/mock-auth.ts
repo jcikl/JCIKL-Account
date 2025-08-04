@@ -43,7 +43,7 @@ let currentUser: UserProfile | null = null
 let authListeners: ((user: UserProfile | null) => void)[] = []
 
 // 从 localStorage 恢复用户状态
-function restoreFromStorage(): void {
+const restoreFromStorage = (): void => {
   try {
     // 检查是否在浏览器环境中
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -75,7 +75,7 @@ function restoreFromStorage(): void {
 }
 
 // 保存到 localStorage
-function saveToStorage(user: UserProfile): void {
+const saveToStorage = (user: UserProfile): void => {
   try {
     // 检查是否在浏览器环境中
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -90,7 +90,7 @@ function saveToStorage(user: UserProfile): void {
 }
 
 // 清除 localStorage
-function clearStorage(): void {
+const clearStorage = (): void => {
   try {
     // 检查是否在浏览器环境中
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -105,7 +105,9 @@ function clearStorage(): void {
 }
 
 // 初始化时恢复状态
-restoreFromStorage()
+if (typeof window !== 'undefined') {
+  restoreFromStorage()
+}
 
 export const mockAuth = {
   // 模拟登录
@@ -209,6 +211,7 @@ export const mockAuth = {
       
       const loginTime = parseInt(timestamp)
       const now = Date.now()
+      
       return now - loginTime >= AUTH_EXPIRY_HOURS * 60 * 60 * 1000
     } catch (error) {
       return true
@@ -217,12 +220,12 @@ export const mockAuth = {
   
   // 刷新认证状态
   refreshAuth: (): void => {
-    if (this.isExpired()) {
-      this.signOut()
+    if (mockAuth.isExpired()) {
+      mockAuth.signOut()
     } else {
       // 更新登录时间戳
-      if (currentUser) {
-        saveToStorage(currentUser)
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(MOCK_AUTH_TIMESTAMP_KEY, Date.now().toString())
       }
     }
   }

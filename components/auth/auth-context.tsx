@@ -5,12 +5,12 @@ import * as React from "react"
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
 import { doc, setDoc } from "firebase/firestore"
-import { type UserProfile, UserRoles, RoleLevels } from "@/lib/data"
+import { type UserProfile, type UserRole, UserRoles, RoleLevels } from "@/lib/data"
 import { getUserByUid } from "@/lib/firebase-utils"
 import { mockAuth } from "@/lib/mock-auth"
 
 // 检查是否使用模拟认证
-const USE_MOCK_AUTH = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true' || false
+const USE_MOCK_AUTH = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true' || true
 
 interface AuthContextType {
   currentUser: UserProfile | null
@@ -37,6 +37,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(user)
         setLoading(false)
       })
+      
+      // 检查认证是否过期
+      if (mockAuth.isExpired()) {
+        mockAuth.signOut()
+      }
+      
       return unsubscribe
     } else {
       // 使用真实Firebase认证
@@ -52,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               uid: user.uid,
               email: user.email || "",
               displayName: user.displayName || "New User",
-              role: UserRoles.ASSISTANT_VICE_PRESIDENT, // Default role for unassigned users
+              role: "assistant_vice_president" as UserRole, // Default role for unassigned users
               createdAt: new Date().toISOString(),
               lastLogin: new Date().toISOString(),
             })
@@ -137,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = React.useContext(AuthContext)
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
+    throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
 }
