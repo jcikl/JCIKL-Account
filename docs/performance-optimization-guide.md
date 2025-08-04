@@ -28,7 +28,7 @@
 ```typescript
 // 新增分页状态
 const [currentPage, setCurrentPage] = React.useState(1)
-const [pageSize, setPageSize] = React.useState(50)
+const [pageSize, setPageSize] = React.useState(20)
 const [hasMore, setHasMore] = React.useState(true)
 const [lastDoc, setLastDoc] = React.useState<any>(null)
 

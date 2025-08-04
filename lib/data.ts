@@ -59,7 +59,9 @@ export interface Transaction {
   expense: number // 支出金额
   income: number // 收入金额
   status: "Completed" | "Pending" | "Draft"
+  payer?: string // 付款人
   projectid?: string // 项目户口，从 reference 改为 projectid
+  projectName?: string // 项目名称，用于显示和搜索
   category?: string
   sequenceNumber?: number // 排列序号，用于存储到Firebase
   createdByUid: string // Track who created the transaction

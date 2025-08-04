@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects, addTransactionWithSequence, reorderTransactions } from "@/lib/firebase-utils"
+import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects, addTransactionWithSequence, reorderTransactions, autoMatchAndUpdateProjectIds } from "@/lib/firebase-utils"
 import type { Transaction, Account, Project } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories } from "@/lib/data"
@@ -34,6 +34,7 @@ import { TransactionImportDialog } from "./transaction-import-dialog"
 import { PasteImportDialog } from "./paste-import-dialog"
 import { getCategories } from "@/lib/firebase-utils"
 import { type Category } from "@/lib/data"
+import { matchProjectIdByName, batchMatchProjectIds } from "@/lib/project-utils"
 import {
   DndContext,
   closestCenter,
@@ -64,7 +65,9 @@ interface TransactionFormData {
   expense: string
   income: string
   status: "Completed" | "Pending" | "Draft"
+  payer?: string // 付款人
   projectid?: string // 从 reference 改为 projectid
+  projectName?: string // 项目名称
   category?: string
 }
 
@@ -163,7 +166,8 @@ function SortableTransactionRow({
           {transaction.status}
         </Badge>
       </TableCell>
-      <TableCell>{transaction.projectid || "-"}</TableCell>
+      <TableCell>{transaction.payer || "-"}</TableCell>
+      <TableCell>{transaction.projectName || transaction.projectid || "-"}</TableCell>
       <TableCell>{transaction.category || "-"}</TableCell>
       {hasPermission && (
         <TableCell>
@@ -220,10 +224,14 @@ export function BankTransactions() {
   const [isBatchEditOpen, setIsBatchEditOpen] = React.useState(false)
   const [isBatchDeleteOpen, setIsBatchDeleteOpen] = React.useState(false)
   const [batchFormData, setBatchFormData] = React.useState({
+    payer: "none",
     projectid: "none",
     category: "none"
   })
   const [batchProjectYearFilter, setBatchProjectYearFilter] = React.useState("all")
+  
+  // 编辑交易表单的项目年份筛选
+  const [editFormProjectYearFilter, setEditFormProjectYearFilter] = React.useState("all")
   
   // 新增表格标题行筛选状态
   const [tableDateFilter, setTableDateFilter] = React.useState("")
@@ -233,6 +241,7 @@ export function BankTransactions() {
   const [incomeFilter, setIncomeFilter] = React.useState("")
   const [balanceFilter, setBalanceFilter] = React.useState("")
   const [tableStatusFilter, setTableStatusFilter] = React.useState("all")
+  const [payerFilter, setPayerFilter] = React.useState("")
   const [projectFilter, setProjectFilter] = React.useState("all")
   const [categoryFilter, setCategoryFilter] = React.useState("")
   
@@ -244,6 +253,18 @@ export function BankTransactions() {
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(50)
   const [totalPages, setTotalPages] = React.useState(1)
+  
+  // 项目匹配状态
+  const [isMatchingProjects, setIsMatchingProjects] = React.useState(false)
+  const [matchingResults, setMatchingResults] = React.useState<{
+    updatedCount: number
+    matchedTransactions: Array<{
+      transactionId: string
+      originalProjectId: string | null
+      newProjectId: string
+      confidence: 'exact' | 'partial' | 'code'
+    }>
+  } | null>(null)
   
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -302,6 +323,77 @@ export function BankTransactions() {
       title: "已重置",
       description: "交易顺序已重置为原始顺序"
     })
+  }
+
+  // 自动匹配项目名称到项目序号
+  const handleAutoMatchProjects = async () => {
+    if (!currentUser) return
+
+    try {
+      setIsMatchingProjects(true)
+      setMatchingResults(null)
+
+      // 获取所有交易记录和项目
+      const allTransactions = await getTransactions()
+      const allProjects = await getProjects()
+
+      // 执行自动匹配和更新
+      const results = await autoMatchAndUpdateProjectIds(allTransactions, allProjects)
+
+      setMatchingResults(results)
+
+      // 刷新交易记录
+      await fetchTransactions()
+
+      // 显示结果
+      if (results.updatedCount > 0) {
+        toast({
+          title: "项目匹配完成",
+          description: `成功匹配并更新了 ${results.updatedCount} 笔交易的项目序号`,
+        })
+      } else {
+        toast({
+          title: "项目匹配完成",
+          description: "没有找到需要更新的交易记录",
+        })
+      }
+    } catch (error) {
+      console.error('Error auto matching projects:', error)
+      toast({
+        title: "项目匹配失败",
+        description: `匹配过程中出错: ${error}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsMatchingProjects(false)
+    }
+  }
+
+  // 预览项目匹配结果
+  const handlePreviewProjectMatch = () => {
+    if (!transactions.length || !projects.length) {
+      toast({
+        title: "无法预览",
+        description: "没有交易记录或项目数据",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const results = batchMatchProjectIds(transactions, projects)
+    const matchedCount = results.filter(r => r.matchedProjectId).length
+
+    if (matchedCount > 0) {
+      toast({
+        title: "匹配预览",
+        description: `找到 ${matchedCount} 笔交易可以匹配到项目序号`,
+      })
+    } else {
+      toast({
+        title: "匹配预览",
+        description: "没有找到可以匹配的交易记录",
+      })
+    }
   }
 
   // Form state
@@ -452,16 +544,36 @@ export function BankTransactions() {
     if (!currentUser || selectedTransactions.size === 0) return
 
     try {
+      console.log('=== 批量更新交易记录开始 ===')
+      console.log('当前用户:', currentUser.uid)
+      console.log('选中的交易数量:', selectedTransactions.size)
+      console.log('选中的交易ID列表:', Array.from(selectedTransactions))
+      console.log('批量表单数据:', batchFormData)
+      
       const updateData: any = {}
       
+      if (batchFormData.payer !== "none") {
+        updateData.payer = batchFormData.payer === "empty" ? "" : batchFormData.payer
+      }
       if (batchFormData.projectid !== "none") {
-        updateData.projectid = batchFormData.projectid === "empty" ? "" : batchFormData.projectid
+        if (batchFormData.projectid === "empty") {
+          updateData.projectid = ""
+          updateData.projectName = ""
+        } else {
+          updateData.projectid = batchFormData.projectid
+          updateData.projectName = extractProjectName(batchFormData.projectid)
+        }
       }
       if (batchFormData.category !== "none") {
         updateData.category = batchFormData.category === "empty" ? "" : batchFormData.category
       }
 
+      console.log('=== 构建的批量更新数据 ===')
+      console.log('更新数据:', updateData)
+      console.log('更新数据键值:', Object.keys(updateData))
+
       if (Object.keys(updateData).length === 0) {
+        console.log('没有要更新的数据，操作取消')
         toast({
           title: "警告",
           description: "请至少选择一个字段进行更新",
@@ -470,23 +582,35 @@ export function BankTransactions() {
         return
       }
 
+      console.log('=== 开始批量更新 ===')
       let updatedCount = 0
       for (const transactionId of selectedTransactions) {
+        console.log(`正在更新交易ID: ${transactionId}`)
         await updateDocument("transactions", transactionId, updateData)
         updatedCount++
+        console.log(`交易ID ${transactionId} 更新完成，已更新 ${updatedCount} 笔`)
       }
 
+      console.log('=== 批量更新完成，开始刷新数据 ===')
       await fetchTransactions()
+      console.log('数据刷新完成')
       setSelectedTransactions(new Set())
       setIsBatchEditOpen(false)
-      setBatchFormData({ projectid: "none", category: "none" })
+      setBatchFormData({ payer: "none", projectid: "none", category: "none" })
       setBatchProjectYearFilter("all")
+      
+      console.log('=== 批量更新交易记录流程结束 ===')
+      console.log(`总共更新了 ${updatedCount} 笔交易`)
       
       toast({
         title: "成功",
         description: `已批量更新 ${updatedCount} 笔交易`
       })
     } catch (err: any) {
+      console.error('=== 批量更新交易记录失败 ===')
+      console.error('错误详情:', err)
+      console.error('错误消息:', err.message)
+      console.error('错误堆栈:', err.stack)
       setError("批量更新失败: " + err.message)
       console.error("Error batch updating transactions:", err)
     }
@@ -505,15 +629,71 @@ export function BankTransactions() {
     return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a)) // 降序排列
   }
 
-  // 根据年份筛选项目
+  // 根据年份筛选项目（用于批量编辑）
   const getFilteredProjects = () => {
-    if (batchProjectYearFilter === "all") {
-      return projects
+    let filteredProjects = projects
+    
+    if (batchProjectYearFilter !== "all") {
+      filteredProjects = projects.filter(project => {
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === batchProjectYearFilter
+      })
     }
-    return projects.filter(project => {
-      const projectYear = project.projectid.split('_')[0]
-      return projectYear === batchProjectYearFilter
+    
+    // 按项目代码排序
+    return filteredProjects.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
     })
+  }
+
+  // 根据年份筛选项目（用于编辑交易表单）
+  const getEditFormFilteredProjects = () => {
+    let filteredProjects = projects
+    
+    if (editFormProjectYearFilter !== "all") {
+      filteredProjects = projects.filter(project => {
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === editFormProjectYearFilter
+      })
+    }
+    
+    // 按项目代码排序
+    return filteredProjects.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
+    })
+  }
+
+  // 按BOD分类分组项目
+  const getGroupedProjects = (projectsToGroup: Project[]) => {
+    const grouped: { [key: string]: Project[] } = {}
+    
+    projectsToGroup.forEach(project => {
+      const bodCategory = project.bodCategory
+      const bodDisplayName = BODCategories[bodCategory]
+      
+      if (!grouped[bodDisplayName]) {
+        grouped[bodDisplayName] = []
+      }
+      grouped[bodDisplayName].push(project)
+    })
+    
+    return grouped
   }
 
   // 获取可用的项目户口列表（用于筛选）
@@ -525,6 +705,68 @@ export function BankTransactions() {
       }
     })
     return Array.from(projectIds).sort()
+  }
+
+  // 从项目ID中提取项目名称
+  const extractProjectName = (projectId: string): string => {
+    const parts = projectId.split('_')
+    if (parts.length >= 3) {
+      return parts.slice(2).join('_') // 项目名称是第三部分开始
+    } else if (parts.length >= 2) {
+      return projectId // 如果没有项目名称部分，使用整个ID
+    }
+    return projectId
+  }
+
+  // 获取按BOD分组的项目列表（用于筛选下拉框）
+  const getGroupedAvailableProjects = () => {
+    const projectIds = new Set<string>()
+    transactions.forEach(transaction => {
+      if (transaction.projectid && transaction.projectid.trim()) {
+        projectIds.add(transaction.projectid)
+      }
+    })
+    
+    // 将项目ID转换为项目对象，以便按BOD分组
+    const projectObjects = Array.from(projectIds).map(projectId => {
+      // 从项目ID中提取BOD分类和项目名称
+      const parts = projectId.split('_')
+      if (parts.length >= 3) {
+        const bodCategory = parts[1] as keyof typeof BODCategories
+        const projectName = parts.slice(2).join('_') // 项目名称是第三部分开始
+        return {
+          id: projectId,
+          projectid: projectId,
+          bodCategory: bodCategory,
+          name: projectName,
+          budget: 0,
+          remaining: 0,
+          status: "Active" as const
+        }
+      } else if (parts.length >= 2) {
+        const bodCategory = parts[1] as keyof typeof BODCategories
+        return {
+          id: projectId,
+          projectid: projectId,
+          bodCategory: bodCategory,
+          name: projectId, // 如果没有项目名称部分，使用整个ID
+          budget: 0,
+          remaining: 0,
+          status: "Active" as const
+        }
+      }
+      return {
+        id: projectId,
+        projectid: projectId,
+        bodCategory: 'P' as keyof typeof BODCategories, // 默认分类
+        name: projectId,
+        budget: 0,
+        remaining: 0,
+        status: "Active" as const
+      }
+    })
+    
+    return getGroupedProjects(projectObjects)
   }
 
   const handleBatchDelete = async () => {
@@ -581,7 +823,9 @@ export function BankTransactions() {
       filtered = filtered.filter(transaction =>
         transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (transaction.description2 && transaction.description2.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (transaction.payer && transaction.payer.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (transaction.projectid && transaction.projectid.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (transaction.projectName && transaction.projectName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (transaction.category && transaction.category.toLowerCase().includes(searchTerm.toLowerCase()))
       )
     }
@@ -636,6 +880,12 @@ export function BankTransactions() {
       filtered = filtered.filter(transaction => transaction.status === tableStatusFilter)
     }
 
+    if (payerFilter) {
+      filtered = filtered.filter(transaction => 
+        transaction.payer && transaction.payer.toLowerCase().includes(payerFilter.toLowerCase())
+      )
+    }
+
     if (projectFilter !== "all") {
       if (projectFilter === "-") {
         // 筛选无项目户口的交易（projectid为空、null、undefined或"-"）
@@ -660,7 +910,7 @@ export function BankTransactions() {
 
     setFilteredTransactions(filtered)
     setSortedTransactions(filtered)
-  }, [transactions, yearFilter, monthFilter, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, projectFilter, categoryFilter])
+  }, [transactions, yearFilter, monthFilter, searchTerm, tableDateFilter, descriptionFilter, description2Filter, expenseFilter, incomeFilter, balanceFilter, tableStatusFilter, payerFilter, projectFilter, categoryFilter])
 
   const resetForm = () => {
     setFormData({
@@ -670,9 +920,11 @@ export function BankTransactions() {
       expense: "",
       income: "",
       status: "Pending",
+      payer: "",
       projectid: "none",
       category: "none"
     })
+    setEditFormProjectYearFilter("all") // 重置年份筛选
   }
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -680,6 +932,12 @@ export function BankTransactions() {
     if (!currentUser) return
 
     try {
+      console.log('=== 交易记录编辑/添加开始 ===')
+      console.log('当前用户:', currentUser.uid)
+      console.log('编辑模式:', isEditMode)
+      console.log('编辑中的交易ID:', editingTransaction?.id)
+      console.log('原始表单数据:', formData)
+      
       const expense = parseFloat(formData.expense) || 0
       const income = parseFloat(formData.income) || 0
       
@@ -746,9 +1004,16 @@ export function BankTransactions() {
         transactionData.description2 = formData.description2
       }
 
+      // 只有当payer有值时才添加
+      if (formData.payer && formData.payer.trim()) {
+        transactionData.payer = formData.payer
+      }
+
       // 只有当projectid有值且不是"none"时才添加
       if (formData.projectid && formData.projectid !== "none" && formData.projectid.trim()) {
         transactionData.projectid = formData.projectid
+        // 同时设置项目名称
+        transactionData.projectName = extractProjectName(formData.projectid)
       }
 
       // 只有当category有值且不是"none"时才添加
@@ -756,27 +1021,51 @@ export function BankTransactions() {
         transactionData.category = formData.category
       }
 
+      console.log('=== 构建的交易数据 ===')
+      console.log('处理后的交易数据:', transactionData)
+      console.log('日期格式:', dateStr)
+      console.log('支出金额:', expense)
+      console.log('收入金额:', income)
+      console.log('净金额:', income - expense)
+      console.log('状态:', formData.status)
+      console.log('项目ID:', formData.projectid)
+      console.log('分类:', formData.category)
+
       if (isEditMode && editingTransaction?.id) {
+        console.log('=== 更新交易记录 ===')
+        console.log('更新交易ID:', editingTransaction.id)
+        console.log('更新数据:', transactionData)
         await updateDocument("transactions", editingTransaction.id, transactionData)
+        console.log('交易更新完成')
         toast({
           title: "成功",
           description: "交易已更新"
         })
       } else {
+        console.log('=== 添加新交易记录 ===')
+        console.log('添加数据:', transactionData)
         // 使用新的序号系统添加交易
         await addTransactionWithSequence(transactionData)
+        console.log('交易添加完成')
         toast({
           title: "成功",
           description: "交易已添加并分配序号"
         })
       }
 
+      console.log('=== 操作完成，开始刷新数据 ===')
       await fetchTransactions()
+      console.log('数据刷新完成')
       setIsFormOpen(false)
       setIsEditMode(false)
       setEditingTransaction(null)
       resetForm()
+      console.log('=== 交易记录编辑/添加流程结束 ===')
     } catch (err: any) {
+      console.error('=== 交易记录操作失败 ===')
+      console.error('错误详情:', err)
+      console.error('错误消息:', err.message)
+      console.error('错误堆栈:', err.stack)
       toast({
         title: "错误",
         description: "保存交易失败: " + err.message,
@@ -786,6 +1075,19 @@ export function BankTransactions() {
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
+    console.log('=== 开始编辑交易记录 ===')
+    console.log('要编辑的交易记录:', transaction)
+    console.log('交易ID:', transaction.id)
+    console.log('交易日期:', transaction.date)
+    console.log('交易描述:', transaction.description)
+    console.log('交易描述2:', transaction.description2)
+    console.log('支出金额:', transaction.expense)
+    console.log('收入金额:', transaction.income)
+    console.log('交易状态:', transaction.status)
+    console.log('项目ID:', transaction.projectid)
+    console.log('分类:', transaction.category)
+    console.log('序号:', transaction.sequenceNumber)
+    
     setEditingTransaction(transaction)
     
     // 确保日期格式为 yyyy-mm-dd
@@ -825,18 +1127,55 @@ export function BankTransactions() {
       }
     }
     
-    setFormData({
+    const formDataToSet = {
       date: dateStr,
       description: transaction.description,
       description2: transaction.description2 || "",
       expense: transaction.expense.toString(),
       income: transaction.income.toString(),
       status: transaction.status,
+      payer: transaction.payer || "",
       projectid: transaction.projectid || "none",
+      projectName: transaction.projectName || "",
       category: transaction.category || "none"
-    })
+    }
+    
+    console.log('=== 设置表单数据 ===')
+    console.log('处理后的表单数据:', formDataToSet)
+    console.log('日期字符串:', dateStr)
+    console.log('描述:', transaction.description)
+    console.log('描述2:', transaction.description2 || "")
+    console.log('支出字符串:', transaction.expense.toString())
+    console.log('收入字符串:', transaction.income.toString())
+    console.log('状态:', transaction.status)
+    console.log('项目ID:', transaction.projectid || "none")
+    console.log('分类:', transaction.category || "none")
+    
+    setFormData(formDataToSet)
+    
+    // 根据当前交易的项目设置年份筛选
+    if (transaction.projectid) {
+      const project = projects.find(p => p.name === transaction.projectid)
+      if (project) {
+        const projectYear = project.projectid.split('_')[0]
+        if (projectYear && !isNaN(parseInt(projectYear))) {
+          setEditFormProjectYearFilter(projectYear)
+        } else {
+          setEditFormProjectYearFilter("all")
+        }
+      } else {
+        setEditFormProjectYearFilter("all")
+      }
+    } else {
+      setEditFormProjectYearFilter("all")
+    }
+    
     setIsEditMode(true)
     setIsFormOpen(true)
+    console.log('=== 编辑模式设置完成 ===')
+    console.log('编辑模式状态:', true)
+    console.log('表单打开状态:', true)
+    console.log('编辑中的交易:', transaction)
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -954,6 +1293,7 @@ export function BankTransactions() {
     expense: number
     income: number
     status: "Completed" | "Pending" | "Draft"
+    payer?: string
     projectid?: string
     category?: string
     isValid: boolean
@@ -1036,9 +1376,16 @@ export function BankTransactions() {
           transactionData.description2 = parsed.description2
         }
 
+        // 只有当payer有值时才添加
+        if (parsed.payer && parsed.payer.trim()) {
+          transactionData.payer = parsed.payer
+        }
+
         // 只有当projectid有值时才添加
         if (parsed.projectid && parsed.projectid.trim()) {
           transactionData.projectid = parsed.projectid
+          // 同时设置项目名称
+          transactionData.projectName = extractProjectName(parsed.projectid)
         }
 
         // 只有当category有值时才添加
@@ -1079,13 +1426,26 @@ export function BankTransactions() {
   const handleDeleteTransaction = async (id: string) => {
     if (!confirm("您确定要删除此交易吗？")) return
     try {
+      console.log('=== 删除交易记录开始 ===')
+      console.log('要删除的交易ID:', id)
+      
       await deleteDocument("transactions", id)
+      console.log('交易删除完成')
+      
+      console.log('开始刷新数据')
       await fetchTransactions()
+      console.log('数据刷新完成')
+      
+      console.log('=== 删除交易记录流程结束 ===')
       toast({
         title: "成功",
         description: "交易已删除"
       })
     } catch (err: any) {
+      console.error('=== 删除交易记录失败 ===')
+      console.error('错误详情:', err)
+      console.error('错误消息:', err.message)
+      console.error('错误堆栈:', err.stack)
       setError("删除交易失败: " + err.message)
       console.error("Error deleting transaction:", err)
     }
@@ -1093,7 +1453,7 @@ export function BankTransactions() {
 
   const exportTransactions = () => {
     const csvContent = [
-      ["日期", "描述", "描述2", "支出金额", "收入金额", "状态", "参考", "分类", "项目账户分类"].join(","),
+      ["日期", "描述", "描述2", "支出金额", "收入金额", "状态", "付款人", "参考", "分类", "项目账户分类"].join(","),
       ...filteredTransactions.map(t => [
         typeof t.date === 'string' ? t.date : new Date(t.date.seconds * 1000).toISOString().split("T")[0],
         t.description,
@@ -1101,6 +1461,7 @@ export function BankTransactions() {
         t.expense.toFixed(2),
         t.income.toFixed(2),
         t.status,
+        t.payer || "",
         t.projectid || "",
         t.category || ""
       ].join(","))
@@ -1254,6 +1615,31 @@ export function BankTransactions() {
             }}>
               <Plus className="h-4 w-4 mr-2" />
               添加交易
+            </Button>
+          )}
+
+          {/* 项目匹配按钮 */}
+          {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleAutoMatchProjects}
+              disabled={isMatchingProjects}
+            >
+              <Tag className="h-4 w-4 mr-2" />
+              {isMatchingProjects ? "匹配中..." : "自动匹配项目"}
+            </Button>
+          )}
+
+          {/* 项目匹配预览按钮 */}
+          {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handlePreviewProjectMatch}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              预览匹配
             </Button>
           )}
         </div>
@@ -1574,6 +1960,17 @@ export function BankTransactions() {
                         </TableHead>
                         <TableHead>
                           <div className="space-y-2">
+                            <div className="font-medium">付款人</div>
+                            <Input
+                              placeholder="筛选付款人..."
+                              value={payerFilter}
+                              onChange={(e) => setPayerFilter(e.target.value)}
+                              className="h-6 text-xs"
+                            />
+                          </div>
+                        </TableHead>
+                        <TableHead>
+                          <div className="space-y-2">
                             <div className="font-medium">项目户口</div>
                             <Select value={projectFilter} onValueChange={setProjectFilter}>
                               <SelectTrigger className="h-6 text-xs">
@@ -1582,10 +1979,17 @@ export function BankTransactions() {
                               <SelectContent>
                                 <SelectItem value="all">所有项目户口</SelectItem>
                                 <SelectItem value="-">无项目户口</SelectItem>
-                                {getAvailableProjects().map((projectId) => (
-                                  <SelectItem key={projectId} value={projectId}>
-                                    {projectId}
-                                  </SelectItem>
+                                {Object.entries(getGroupedAvailableProjects()).map(([bodCategory, projects]) => (
+                                  <div key={bodCategory}>
+                                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                                      {bodCategory}
+                                    </div>
+                                    {projects.map((project) => (
+                                      <SelectItem key={project.id} value={project.projectid} className="ml-4">
+                                        {project.name}
+                                      </SelectItem>
+                                    ))}
+                                  </div>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -1734,19 +2138,37 @@ export function BankTransactions() {
                     </TableHead>
                     <TableHead>
                       <div className="space-y-2">
+                        <div className="font-medium">付款人</div>
+                        <Input
+                          placeholder="筛选付款人..."
+                          value={payerFilter}
+                          onChange={(e) => setPayerFilter(e.target.value)}
+                          className="h-6 text-xs"
+                        />
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="space-y-2">
                         <div className="font-medium">项目户口</div>
                         <Select value={projectFilter} onValueChange={setProjectFilter}>
                           <SelectTrigger className="h-6 text-xs">
                             <SelectValue placeholder="选择项目户口" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">所有项目户口</SelectItem>
-                            <SelectItem value="-">无项目户口</SelectItem>
-                            {getAvailableProjects().map((projectId) => (
-                              <SelectItem key={projectId} value={projectId}>
-                                {projectId}
-                              </SelectItem>
-                            ))}
+                                                          <SelectItem value="all">所有项目户口</SelectItem>
+                              <SelectItem value="-">无项目户口</SelectItem>
+                              {Object.entries(getGroupedAvailableProjects()).map(([bodCategory, projects]) => (
+                                <div key={bodCategory}>
+                                  <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                                    {bodCategory}
+                                  </div>
+                                  {projects.map((project) => (
+                                    <SelectItem key={project.id} value={project.projectid} className="ml-4">
+                                      {project.name}
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1825,7 +2247,7 @@ export function BankTransactions() {
           <DialogHeader>
             <DialogTitle>批量编辑交易</DialogTitle>
             <DialogDescription>
-              为选中的 {selectedTransactions.size} 笔交易设置项目户口和收支分类
+              为选中的 {selectedTransactions.size} 笔交易设置付款人、项目户口和收支分类
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1847,6 +2269,15 @@ export function BankTransactions() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="batch-payer">付款人</Label>
+              <Input
+                id="batch-payer"
+                value={batchFormData.payer === "none" ? "" : batchFormData.payer === "empty" ? "" : batchFormData.payer}
+                onChange={(e) => setBatchFormData({ ...batchFormData, payer: e.target.value })}
+                placeholder="付款人姓名"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="batch-reference">项目户口</Label>
               <Select value={batchFormData.projectid} onValueChange={(value) => 
                 setBatchFormData({ ...batchFormData, projectid: value })}>
@@ -1856,10 +2287,17 @@ export function BankTransactions() {
                 <SelectContent>
                   <SelectItem value="none">保持不变</SelectItem>
                   <SelectItem value="empty">无项目</SelectItem>
-                  {getFilteredProjects().map((project) => (
-                    <SelectItem key={project.id} value={project.name}>
-                      {project.name} ({project.projectid})
-                    </SelectItem>
+                  {Object.entries(getGroupedProjects(getFilteredProjects())).map(([bodCategory, projects]) => (
+                    <div key={bodCategory}>
+                      <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                        {bodCategory}
+                      </div>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.name} className="ml-4">
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </div>
                   ))}
                 </SelectContent>
               </Select>
@@ -1997,6 +2435,15 @@ export function BankTransactions() {
                 placeholder="描述2（可选）"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="payer">付款人</Label>
+              <Input
+                id="payer"
+                value={formData.payer}
+                onChange={(e) => setFormData({ ...formData, payer: e.target.value })}
+                placeholder="付款人姓名（可选）"
+              />
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="expense">支出金额</Label>
@@ -2021,7 +2468,24 @@ export function BankTransactions() {
                 />
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="space-y-2">
+                <Label htmlFor="project-year-filter">项目年份</Label>
+                <Select value={editFormProjectYearFilter} onValueChange={(value) => 
+                  setEditFormProjectYearFilter(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目年份" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">所有年份</SelectItem>
+                    {getAvailableProjectYears().map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}年
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="reference">项目户口</Label>
                 <Select value={formData.projectid} onValueChange={(value) => 
@@ -2031,10 +2495,17 @@ export function BankTransactions() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">无项目</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.name}>
-                        {project.name} ({project.projectid})
-                      </SelectItem>
+                    {Object.entries(getGroupedProjects(getEditFormFilteredProjects())).map(([bodCategory, projects]) => (
+                      <div key={bodCategory}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                          {bodCategory}
+                        </div>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.name} className="ml-4">
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </div>
                     ))}
                   </SelectContent>
                 </Select>
@@ -2087,6 +2558,83 @@ export function BankTransactions() {
         existingTransactions={transactions}
         onImport={handleImportTransactions}
       />
+
+      {/* 项目匹配结果对话框 */}
+      <Dialog open={!!matchingResults} onOpenChange={() => setMatchingResults(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>项目匹配结果</DialogTitle>
+            <DialogDescription>
+              自动匹配项目名称到项目序号的详细结果
+            </DialogDescription>
+          </DialogHeader>
+          
+          {matchingResults && (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2 text-green-700">
+                  <CheckSquare className="h-4 w-4" />
+                  <span className="text-sm font-medium">匹配完成</span>
+                </div>
+                <p className="text-sm text-green-600 mt-1">
+                  成功更新了 {matchingResults.updatedCount} 笔交易的项目序号
+                </p>
+              </div>
+
+              {matchingResults.matchedTransactions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-medium">匹配详情</h4>
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>交易描述</TableHead>
+                          <TableHead>原项目序号</TableHead>
+                          <TableHead>新项目序号</TableHead>
+                          <TableHead>匹配置信度</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {matchingResults.matchedTransactions.map((match) => {
+                          const transaction = transactions.find(t => t.id === match.transactionId)
+                          return (
+                            <TableRow key={match.transactionId}>
+                              <TableCell className="max-w-xs truncate">
+                                {transaction?.description || '未知交易'}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">
+                                {match.originalProjectId || '-'}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">
+                                {match.newProjectId}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={
+                                  match.confidence === 'exact' ? 'default' :
+                                  match.confidence === 'partial' ? 'secondary' : 'outline'
+                                }>
+                                  {match.confidence === 'exact' ? '精确匹配' :
+                                   match.confidence === 'partial' ? '部分匹配' : '代码匹配'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setMatchingResults(null)}>
+                  关闭
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

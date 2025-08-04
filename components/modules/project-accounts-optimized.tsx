@@ -144,7 +144,20 @@ export function ProjectAccountsOptimized() {
       })
     }
 
-    setFilteredProjects(filtered)
+    // 按项目代码排序
+    const sortedFiltered = filtered.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
+    })
+    
+    setFilteredProjects(sortedFiltered)
   }, [projects, filters, currentUser])
 
   // 分页计算

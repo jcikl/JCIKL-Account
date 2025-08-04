@@ -36,7 +36,6 @@ interface ParsedTransaction {
   description2?: string
   expense: number
   income: number
-  status: "Completed" | "Pending" | "Draft"
   reference?: string
   category?: string
   isValid: boolean
@@ -165,11 +164,7 @@ const TransactionRow = React.memo(({
     <TableCell className="text-right font-medium">
       ${(transaction.income - transaction.expense).toFixed(2)}
     </TableCell>
-    <TableCell>
-      <Badge variant={transaction.status === 'Completed' ? 'default' : 'secondary'}>
-        {transaction.status}
-      </Badge>
-    </TableCell>
+
   </TableRow>
 ))
 
@@ -226,16 +221,42 @@ export function TransactionImportDialogOptimized({
             throw new Error(`不支持的数据格式: ${format}`)
         }
 
-        if (fields.length < 4) {
-          errors.push("数据字段不足，至少需要日期、描述、收入、支出")
+        // 智能解析字段 - 支持多种格式（已移除状态字段）
+        let date, description, description2, expenseStr, incomeStr, category, reference
+        
+        if (fields.length >= 7) {
+          // 完整格式：日期,描述,描述2,支出金额,收入金额,项目户口,分类
+          [date, description, description2, expenseStr, incomeStr, category, reference] = fields
+        } else if (fields.length >= 6) {
+          // 简化格式：日期,描述,支出金额,收入金额,项目户口,分类
+          [date, description, expenseStr, incomeStr, category, reference] = fields
+          description2 = "" // 描述2为空
+        } else if (fields.length >= 5) {
+          // 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
+          [date, description, description2, expenseStr, incomeStr] = fields
+          category = "" // 默认分类
+          reference = "" // 默认参考
+        } else if (fields.length >= 4) {
+          // 更小格式：日期,描述,支出金额,收入金额
+          [date, description, expenseStr, incomeStr] = fields
+          description2 = "" // 描述2为空
+          category = "" // 默认分类
+          reference = "" // 默认参考
+        } else {
+          errors.push("数据字段不足，至少需要日期、描述、支出金额")
+          date = fields[0] || ""
+          description = fields[1] || ""
+          description2 = fields[2] || ""
+          expenseStr = fields[3] || ""
+          incomeStr = fields[4] || ""
+          category = ""
+          reference = ""
         }
-
-        const [date, description, incomeStr, expenseStr, status = 'Completed', category = '', reference = ''] = fields
 
         // 验证必填字段
         if (!date) errors.push("日期不能为空")
         if (!description) errors.push("描述不能为空")
-        if (!incomeStr && !expenseStr) errors.push("收入或支出至少填写一项")
+        if (!expenseStr && !incomeStr) errors.push("支出或收入至少填写一项")
 
         // 验证日期格式
         if (date && isNaN(Date.parse(date))) {
@@ -243,17 +264,11 @@ export function TransactionImportDialogOptimized({
         }
 
         // 验证金额
-        const income = parseFloat(incomeStr) || 0
         const expense = parseFloat(expenseStr) || 0
+        const income = parseFloat(incomeStr) || 0
         
-        if (income < 0) errors.push("收入不能为负数")
         if (expense < 0) errors.push("支出不能为负数")
-
-        // 验证状态
-        const validStatuses = ["Completed", "Pending", "Draft"]
-        if (status && !validStatuses.includes(status)) {
-          errors.push(`无效的状态: ${status}`)
-        }
+        if (income < 0) errors.push("收入不能为负数")
 
         // 检查重复交易
         const existingTransaction = existingTransactions.find(t => 
@@ -267,9 +282,9 @@ export function TransactionImportDialogOptimized({
         return {
           date: date || '',
           description: description || '',
+          description2: description2 || '',
           income,
           expense,
-          status: status as any,
           category: category || '',
           reference: reference || '',
           isValid: errors.length === 0,
@@ -473,7 +488,7 @@ export function TransactionImportDialogOptimized({
                     </FormControl>
                   </div>
                   <FormDescription>
-                    支持格式：日期,描述,收入,支出,状态,分类,参考号
+                                            支持格式：日期,描述,描述2,支出金额,收入金额,项目户口,分类
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -594,7 +609,7 @@ export function TransactionImportDialogOptimized({
                             <TableHead className="text-right">收入</TableHead>
                             <TableHead className="text-right">支出</TableHead>
                             <TableHead className="text-right">净额</TableHead>
-                            <TableHead>状态</TableHead>
+        
                           </TableRow>
                         </TableHeader>
                         <TableBody>

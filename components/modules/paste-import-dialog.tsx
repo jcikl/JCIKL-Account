@@ -36,11 +36,13 @@ interface ParsedTransaction {
   expense: number
   income: number
   status: "Completed" | "Pending" | "Draft"
+  payer?: string
   projectid?: string
   category?: string
   isValid: boolean
   errors: string[]
   isUpdate?: boolean
+  rowNumber?: number
 }
 
 interface PasteImportDialogProps {
@@ -92,6 +94,7 @@ export function PasteImportDialog({
       const transactions: ParsedTransaction[] = dataLines.map((line, index) => {
         const errors: string[] = []
         let fields: string[]
+        const rowNumber = skipHeader ? index + 2 : index + 1 // 计算实际行号
 
         // 根据格式解析字段
         switch (format) {
@@ -108,20 +111,31 @@ export function PasteImportDialog({
             fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
         }
 
-        // 智能解析字段 - 支持多种格式
-        let dateStr, description, description2, expenseStr, incomeStr, statusStr, projectid, category
+        // 智能解析字段 - 支持三种格式
+        let dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category
         
-        if (fields.length >= 8) {
-          // 完整格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类
-          [dateStr, description, description2, expenseStr, incomeStr, statusStr, projectid, category] = fields
-        } else if (fields.length >= 7) {
-          // 简化格式：日期,描述,支出金额,收入金额,状态,项目户口,分类
-          [dateStr, description, expenseStr, incomeStr, statusStr, projectid, category] = fields
+        if (fields.length >= 9) {
+          // 完整格式：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目户口(可选),分类(可选)
+          [dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category] = fields
+        } else if (fields.length >= 8) {
+          // 完整格式（有空字段）：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目户口(可选),分类(可选)
+          [dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category] = fields
+        } else if (fields.length >= 6) {
+          // 简化格式：日期,描述,支出金额,收入金额,项目户口(可选),分类(可选)
+          [dateStr, description, expenseStr, incomeStr, projectid, category] = fields
           description2 = "" // 描述2为空
+          payer = "" // 付款人为空
         } else if (fields.length >= 5) {
           // 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
           [dateStr, description, description2, expenseStr, incomeStr] = fields
-          statusStr = "Pending" // 默认状态
+          payer = "" // 付款人为空
+          projectid = "" // 默认项目户口
+          category = "" // 默认分类
+        } else if (fields.length >= 4) {
+          // 更小格式：日期,描述,支出金额,收入金额
+          [dateStr, description, expenseStr, incomeStr] = fields
+          description2 = "" // 描述2为空
+          payer = "" // 付款人为空
           projectid = "" // 默认项目户口
           category = "" // 默认分类
         } else {
@@ -131,7 +145,7 @@ export function PasteImportDialog({
           description2 = fields[2] || ""
           expenseStr = fields[3] || ""
           incomeStr = fields[4] || ""
-          statusStr = "Pending" // 默认状态
+          payer = "" // 付款人为空
           projectid = "" // 默认项目户口
           category = "" // 默认分类
           
@@ -184,20 +198,7 @@ export function PasteImportDialog({
           }
         }
 
-        // 验证状态
-        let status: "Completed" | "Pending" | "Draft" = "Pending"
-        if (statusStr) {
-          const statusLower = statusStr.toLowerCase()
-          if (statusLower === "completed" || statusLower === "已完成") {
-            status = "Completed"
-          } else if (statusLower === "pending" || statusLower === "待处理") {
-            status = "Pending"
-          } else if (statusLower === "draft" || statusLower === "草稿") {
-            status = "Draft"
-          } else {
-            errors.push("状态格式无效，应为 Completed/Pending/Draft")
-          }
-        }
+
 
         // 检查是否为更新现有交易
         let isUpdate = false
@@ -217,12 +218,14 @@ export function PasteImportDialog({
           description2: description2 || "",
           expense,
           income,
-          status,
+          status: "Completed" as const,
+          payer: payer || "",
           projectid: projectid || "",
           category: category || "",
           isValid: errors.length === 0,
           errors,
-          isUpdate
+          isUpdate,
+          rowNumber
         }
       })
 
@@ -406,21 +409,21 @@ export function PasteImportDialog({
                     </div>
                     <FormControl>
                       <Textarea
-                        placeholder="粘贴您的交易数据，格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类"
+                        placeholder="粘贴您的交易数据，支持三种格式"
                         className="min-h-[120px] font-mono text-sm"
                         {...field}
                       />
                     </FormControl>
                                          <FormDescription>
-                       支持多种格式：
+                       支持三种格式：
                        <br />
-                       • 完整格式：日期,描述,描述2,支出金额,收入金额,状态,项目户口,分类
+                                                • 完整格式：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目户口(可选),分类(可选)
+                         <br />
+                         • 简化格式：日期,描述,支出金额,收入金额,项目户口(可选),分类(可选)
+                         <br />
+                         • 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
                        <br />
-                       • 简化格式：日期,描述,支出金额,收入金额,状态,项目户口,分类
-                       <br />
-                       • 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
-                       <br />
-                       示例：2024-01-15,办公室用品,办公用品,245.00,0.00,Pending,项目A,办公用品
+                       示例：2024-01-15,办公室用品,办公用品,245.00,0.00,张三,项目A,办公用品
                      </FormDescription>
                     <FormMessage />
                   </div>
@@ -482,6 +485,9 @@ export function PasteImportDialog({
                       {validTransactions.slice(0, 10).map((transaction, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm p-2 bg-green-50 rounded">
                           <CheckCircle className="h-3 w-3 text-green-600" />
+                          <span className="font-mono text-xs bg-green-100 px-1 rounded">
+                            第{transaction.rowNumber}行
+                          </span>
                           <span className="font-mono">{transaction.date}</span>
                           <span className="max-w-20 truncate">{transaction.description}</span>
                           {transaction.description2 && (
@@ -489,10 +495,10 @@ export function PasteImportDialog({
                           )}
                           <span className="text-red-600">-${transaction.expense.toFixed(2)}</span>
                           <span className="text-green-600">+${transaction.income.toFixed(2)}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {transaction.status === "Completed" ? "已完成" : 
-                             transaction.status === "Pending" ? "待处理" : "草稿"}
-                          </Badge>
+                          {transaction.payer && (
+                            <span className="max-w-15 truncate text-blue-600">付款人: {transaction.payer}</span>
+                          )}
+
                           {transaction.isUpdate && (
                             <Badge variant="secondary" className="text-xs">更新</Badge>
                           )}
@@ -516,7 +522,12 @@ export function PasteImportDialog({
                         <div key={index} className="flex items-start gap-2 text-sm p-2 bg-red-50 rounded">
                           <XCircle className="h-3 w-3 text-red-600 mt-0.5" />
                           <div className="flex-1">
-                            <div className="font-mono">{transaction.date || "无日期"}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs bg-red-100 px-1 rounded">
+                                第{transaction.rowNumber}行
+                              </span>
+                              <span className="font-mono">{transaction.date || "无日期"}</span>
+                            </div>
                             <div className="text-xs text-red-600">
                               {transaction.errors.join(", ")}
                             </div>

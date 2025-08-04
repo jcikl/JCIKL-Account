@@ -8,15 +8,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { BODCategories, BODCategory } from "@/lib/data"
 
 // 模拟数据
-const mockProjects = [
-  { id: "1", name: "2024年项目A", projectid: "2024_PROJECT_A" },
-  { id: "2", name: "2024年项目B", projectid: "2024_PROJECT_B" },
-  { id: "3", name: "2023年项目A", projectid: "2023_PROJECT_A" },
-  { id: "4", name: "2023年项目B", projectid: "2023_PROJECT_B" },
-  { id: "5", name: "2022年项目A", projectid: "2022_PROJECT_A" },
-  { id: "6", name: "2022年项目B", projectid: "2022_PROJECT_B" },
+const mockProjects: Array<{
+  id: string
+  name: string
+  projectid: string
+  bodCategory: BODCategory
+}> = [
+  { id: "1", name: "2025年主席项目A", projectid: "2025_P_项目A", bodCategory: "P" },
+  { id: "2", name: "2025年财务项目B", projectid: "2025_HT_项目B", bodCategory: "HT" },
+  { id: "3", name: "2025年执行副主席项目B", projectid: "2025_EVP_项目B", bodCategory: "EVP" },
+  { id: "4", name: "2025年执行副主席项目C", projectid: "2025_EVP_项目C", bodCategory: "EVP" },
+  { id: "5", name: "2024年主席项目A", projectid: "2024_P_项目A", bodCategory: "P" },
+  { id: "6", name: "2024年财务项目B", projectid: "2024_HT_项目B", bodCategory: "HT" },
+  { id: "7", name: "2024年执行副主席项目C", projectid: "2024_EVP_项目C", bodCategory: "EVP" },
 ]
 
 const mockTransactions = [
@@ -48,13 +55,54 @@ export default function BatchEditDemo() {
 
   // 根据年份筛选项目
   const getFilteredProjects = () => {
-    if (batchProjectYearFilter === "all") {
-      return mockProjects
+    let filteredProjects = mockProjects
+    
+    if (batchProjectYearFilter !== "all") {
+      filteredProjects = mockProjects.filter(project => {
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === batchProjectYearFilter
+      })
     }
-    return mockProjects.filter(project => {
-      const projectYear = project.projectid.split('_')[0]
-      return projectYear === batchProjectYearFilter
+    
+    // 按项目代码排序
+    return filteredProjects.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
     })
+  }
+
+  // 按BOD分类分组项目
+  const getGroupedProjects = (projectsToGroup: Array<{
+    id: string
+    name: string
+    projectid: string
+    bodCategory: BODCategory
+  }>) => {
+    const grouped: { [key: string]: Array<{
+      id: string
+      name: string
+      projectid: string
+      bodCategory: BODCategory
+    }> } = {}
+    
+    projectsToGroup.forEach(project => {
+      const bodCategory = project.bodCategory
+      const bodDisplayName = BODCategories[bodCategory]
+      
+      if (!grouped[bodDisplayName]) {
+        grouped[bodDisplayName] = []
+      }
+      grouped[bodDisplayName].push(project)
+    })
+    
+    return grouped
   }
 
   const handleSelectTransaction = (transactionId: string) => {
@@ -205,25 +253,19 @@ export default function BatchEditDemo() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {getAvailableProjectYears().map((year) => {
-              const yearProjects = mockProjects.filter(project => {
-                const projectYear = project.projectid.split('_')[0]
-                return projectYear === year
-              })
-              return (
-                <div key={year} className="space-y-2">
-                  <h3 className="font-semibold">{year}年</h3>
-                  <div className="space-y-1">
-                    {yearProjects.map((project) => (
-                      <div key={project.id} className="text-sm text-muted-foreground">
-                        {project.name} ({project.projectid})
-                      </div>
-                    ))}
-                  </div>
+          <div className="space-y-4">
+            {Object.entries(getGroupedProjects(mockProjects)).map(([bodCategory, projects]) => (
+              <div key={bodCategory} className="space-y-2">
+                <h3 className="font-semibold text-lg border-b pb-2">{bodCategory}</h3>
+                <div className="space-y-1 pl-4">
+                  {projects.map((project) => (
+                    <div key={project.id} className="text-sm text-muted-foreground">
+                      {project.name}
+                    </div>
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -265,10 +307,17 @@ export default function BatchEditDemo() {
                 <SelectContent>
                   <SelectItem value="none">保持不变</SelectItem>
                   <SelectItem value="empty">无项目</SelectItem>
-                  {getFilteredProjects().map((project) => (
-                    <SelectItem key={project.id} value={project.name}>
-                      {project.name} ({project.projectid})
-                    </SelectItem>
+                  {Object.entries(getGroupedProjects(getFilteredProjects())).map(([bodCategory, projects]) => (
+                    <div key={bodCategory}>
+                      <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/50">
+                        {bodCategory}
+                      </div>
+                                              {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.projectid} className="ml-4">
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                    </div>
                   ))}
                 </SelectContent>
               </Select>

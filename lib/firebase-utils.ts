@@ -1,5 +1,5 @@
 // lib/firebase-utils.ts
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot, getCountFromServer, Query } from "firebase/firestore"
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot, getCountFromServer, Query, writeBatch } from "firebase/firestore"
 import { db } from "./firebase"
 import type { Account, JournalEntry, Project, Transaction, UserProfile, Category } from "./data"
 import * as React from "react"
@@ -1364,5 +1364,113 @@ export async function getCategoriesWithOffsetPagination(
   } catch (error) {
     console.error('获取分页分类失败:', error)
     throw error
+  }
+}
+
+/**
+ * 批量更新交易记录的项目序号
+ */
+export async function batchUpdateTransactionProjectIds(
+  transactionIds: string[],
+  projectId: string
+): Promise<void> {
+  try {
+    const batch = writeBatch(db)
+    
+    transactionIds.forEach(transactionId => {
+      const transactionRef = doc(db, "transactions", transactionId)
+      batch.update(transactionRef, { projectid: projectId })
+    })
+    
+    await batch.commit()
+  } catch (error) {
+    console.error('Error batch updating transaction project IDs:', error)
+    throw new Error(`Failed to batch update transaction project IDs: ${error}`)
+  }
+}
+
+/**
+ * 根据项目名称自动匹配并更新交易记录的项目序号
+ */
+export async function autoMatchAndUpdateProjectIds(
+  transactions: Transaction[],
+  projects: Project[]
+): Promise<{
+  updatedCount: number
+  matchedTransactions: Array<{
+    transactionId: string
+    originalProjectId: string | null
+    newProjectId: string
+    confidence: 'exact' | 'partial' | 'code'
+  }>
+}> {
+  const { matchProjectIdByName } = await import('./project-utils')
+  
+  const matchedTransactions: Array<{
+    transactionId: string
+    originalProjectId: string | null
+    newProjectId: string
+    confidence: 'exact' | 'partial' | 'code'
+  }> = []
+  
+  const transactionsToUpdate: Array<{
+    transactionId: string
+    projectId: string
+  }> = []
+  
+  // 匹配每个交易记录
+  transactions.forEach(transaction => {
+    if (!transaction.id) return
+    
+    const matchedProjectId = matchProjectIdByName(transaction.description, projects)
+    
+    if (matchedProjectId && matchedProjectId !== transaction.projectid) {
+      // 确定匹配的置信度
+      const matchedProject = projects.find(p => p.projectid === matchedProjectId)
+      if (!matchedProject) return
+      
+      const normalizedDescription = transaction.description.trim().toLowerCase()
+      const normalizedProjectName = matchedProject.name.toLowerCase()
+      
+      let confidence: 'exact' | 'partial' | 'code' = 'partial'
+      
+      if (normalizedDescription === normalizedProjectName) {
+        confidence = 'exact'
+      } else if (normalizedDescription.includes(normalizedProjectName) || 
+                 normalizedProjectName.includes(normalizedDescription)) {
+        confidence = 'partial'
+      } else {
+        confidence = 'code'
+      }
+      
+      matchedTransactions.push({
+        transactionId: transaction.id,
+        originalProjectId: transaction.projectid || null,
+        newProjectId: matchedProjectId,
+        confidence
+      })
+      
+      transactionsToUpdate.push({
+        transactionId: transaction.id,
+        projectId: matchedProjectId
+      })
+    }
+  })
+  
+  // 批量更新Firebase
+  if (transactionsToUpdate.length > 0) {
+    const batch = writeBatch(db)
+    
+    transactionsToUpdate.forEach(({ transactionId, projectId }) => {
+      const transactionRef = doc(db, "transactions", transactionId)
+      batch.update(transactionRef, { projectid: projectId })
+    })
+    
+    await batch.commit()
+  }
+  
+  return {
+    updatedCount: transactionsToUpdate.length,
+    matchedTransactions
   }
 }

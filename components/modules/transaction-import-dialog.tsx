@@ -108,12 +108,37 @@ export function TransactionImportDialog({
             fields = line.split(',').map(field => field.trim())
         }
 
-        // 验证字段数量
-        if (fields.length < 5) {
-          errors.push("字段数量不足，需要至少：日期、描述、描述2、支出金额、收入金额")
+        // 智能解析字段 - 支持多种格式（已移除状态字段）
+        let date, description, description2, expenseStr, incomeStr, reference, category
+        
+        if (fields.length >= 7) {
+          // 完整格式：日期,描述,描述2,支出金额,收入金额,项目户口,分类
+          [date, description, description2, expenseStr, incomeStr, reference, category] = fields
+        } else if (fields.length >= 6) {
+          // 简化格式：日期,描述,支出金额,收入金额,项目户口,分类
+          [date, description, expenseStr, incomeStr, reference, category] = fields
+          description2 = "" // 描述2为空
+        } else if (fields.length >= 5) {
+          // 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
+          [date, description, description2, expenseStr, incomeStr] = fields
+          reference = "" // 默认项目户口
+          category = "" // 默认分类
+        } else if (fields.length >= 4) {
+          // 更小格式：日期,描述,支出金额,收入金额
+          [date, description, expenseStr, incomeStr] = fields
+          description2 = "" // 描述2为空
+          reference = "" // 默认项目户口
+          category = "" // 默认分类
+        } else {
+          errors.push("字段数量不足，需要至少：日期、描述、支出金额")
+          date = fields[0] || ""
+          description = fields[1] || ""
+          description2 = fields[2] || ""
+          expenseStr = fields[3] || ""
+          incomeStr = fields[4] || ""
+          reference = ""
+          category = ""
         }
-
-        const [date, description, description2, expenseStr, incomeStr, status = "Pending", reference = "", category = ""] = fields
 
         // 验证日期
         if (!date || date.length === 0) {
@@ -148,11 +173,7 @@ export function TransactionImportDialog({
           errors.push("收入金额不能为负数")
         }
 
-        // 验证状态
-        const validStatuses = ["Completed", "Pending", "Draft"]
-        if (status && !validStatuses.includes(status)) {
-          errors.push(`状态必须是以下之一: ${validStatuses.join(', ')}`)
-        }
+
 
         // 检查重复的交易（基于日期、描述和金额）
         const existingTransaction = existingTransactions.find(t => 
@@ -176,9 +197,9 @@ export function TransactionImportDialog({
           description2: description2 || "",
           expense: expense,
           income: income,
-          status: (status as any) || "Pending",
-          reference: reference || undefined,
-          category: category || undefined,
+          status: "Completed" as const,
+          reference: reference || "",
+          category: category || "",
           isValid: errors.length === 0,
           errors,
           isUpdate: existingTransaction ? true : false
@@ -389,15 +410,15 @@ export function TransactionImportDialog({
                     </div>
                     <FormControl>
                       <Textarea
-                        placeholder="粘贴您的交易数据，格式：日期,描述,描述2,支出金额,收入金额,状态,参考,分类"
+                        placeholder="粘贴您的交易数据，格式：日期,描述,描述2,支出金额,收入金额,项目户口,分类"
                         className="min-h-[120px] font-mono text-sm"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      支持格式：日期,描述,描述2,支出金额,收入金额,状态,参考,分类
+                                              支持格式：日期,描述,描述2,支出金额,收入金额,项目户口,分类
                       <br />
-                      示例：2024-01-15,办公室用品,办公用品,245.00,0.00,Pending,INV-001,办公用品
+                      示例：2024-01-15,办公室用品,办公用品,245.00,0.00,项目A,办公用品
                     </FormDescription>
                     <FormMessage />
                   </div>
@@ -542,7 +563,7 @@ export function TransactionImportDialog({
                             <TableHead className="w-[150px]">描述2</TableHead>
                             <TableHead className="w-[100px] text-right">支出</TableHead>
                             <TableHead className="w-[100px] text-right">收入</TableHead>
-                            <TableHead className="w-[80px]">状态</TableHead>
+        
                             <TableHead className="w-[100px]">分类</TableHead>
                             <TableHead className="w-[80px]">类型</TableHead>
                           </TableRow>
@@ -569,11 +590,7 @@ export function TransactionImportDialog({
                                   {transaction.income > 0 ? `+$${transaction.income.toFixed(2)}` : '-'}
                                 </span>
                               </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                  {transaction.status}
-                                </Badge>
-                              </TableCell>
+
                               <TableCell>
                                 {transaction.category ? (
                                   <Badge variant="outline" className="text-xs bg-blue-100">
@@ -618,7 +635,7 @@ export function TransactionImportDialog({
                             )}
                             <span className="text-red-600">-${transaction.expense.toFixed(2)}</span>
                             <span className="text-green-600">+${transaction.income.toFixed(2)}</span>
-                            <Badge variant="outline" className="text-xs">{transaction.status}</Badge>
+
                           </div>
                           <div className="text-xs text-red-600 ml-5">
                             {transaction.errors.join(', ')}

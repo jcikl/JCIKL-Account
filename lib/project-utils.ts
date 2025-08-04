@@ -2,6 +2,7 @@
 // 项目相关工具函数
 
 import { BODCategories, type BODCategory, type Project } from "./data"
+import { type Transaction } from "./data"
 
 /**
  * 生成项目代码
@@ -162,4 +163,97 @@ export function suggestProjectCodes(
   }
   
   return suggestions
+}
+
+/**
+ * 根据交易描述匹配项目ID
+ */
+export function matchProjectIdByName(description: string, projects: Project[]): string | null {
+  if (!description || !projects.length) return null
+  
+  const normalizedDescription = description.trim().toLowerCase()
+  
+  // 1. 精确匹配项目名称
+  const exactMatch = projects.find(project => 
+    project.name.toLowerCase() === normalizedDescription
+  )
+  if (exactMatch) return exactMatch.projectid
+  
+  // 2. 部分匹配项目名称
+  const partialMatch = projects.find(project => 
+    normalizedDescription.includes(project.name.toLowerCase()) ||
+    project.name.toLowerCase().includes(normalizedDescription)
+  )
+  if (partialMatch) return partialMatch.projectid
+  
+  // 3. 匹配项目代码
+  const codeMatch = projects.find(project => 
+    normalizedDescription.includes(project.projectid.toLowerCase())
+  )
+  if (codeMatch) return codeMatch.projectid
+  
+  return null
+}
+
+/**
+ * 批量匹配交易记录到项目ID
+ */
+export function batchMatchProjectIds(transactions: Transaction[], projects: Project[]): Array<{
+  transactionId: string
+  originalProjectId: string | null
+  matchedProjectId: string | null
+  confidence: 'exact' | 'partial' | 'code' | 'none'
+}> {
+  return transactions.map(transaction => {
+    if (!transaction.id) {
+      return {
+        transactionId: '',
+        originalProjectId: transaction.projectid || null,
+        matchedProjectId: null,
+        confidence: 'none' as const
+      }
+    }
+    
+    const matchedProjectId = matchProjectIdByName(transaction.description, projects)
+    
+    if (!matchedProjectId) {
+      return {
+        transactionId: transaction.id,
+        originalProjectId: transaction.projectid || null,
+        matchedProjectId: null,
+        confidence: 'none' as const
+      }
+    }
+    
+    const matchedProject = projects.find(p => p.projectid === matchedProjectId)
+    if (!matchedProject) {
+      return {
+        transactionId: transaction.id,
+        originalProjectId: transaction.projectid || null,
+        matchedProjectId: null,
+        confidence: 'none' as const
+      }
+    }
+    
+    const normalizedDescription = transaction.description.trim().toLowerCase()
+    const normalizedProjectName = matchedProject.name.toLowerCase()
+    
+    let confidence: 'exact' | 'partial' | 'code' = 'partial'
+    
+    if (normalizedDescription === normalizedProjectName) {
+      confidence = 'exact'
+    } else if (normalizedDescription.includes(normalizedProjectName) || 
+               normalizedProjectName.includes(normalizedDescription)) {
+      confidence = 'partial'
+    } else {
+      confidence = 'code'
+    }
+    
+    return {
+      transactionId: transaction.id,
+      originalProjectId: transaction.projectid || null,
+      matchedProjectId,
+      confidence
+    }
+  })
 } 
