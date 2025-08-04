@@ -887,6 +887,11 @@ export async function getTransactionsBatch(
 
 // 优化的项目花费金额计算（并行处理）
 export async function getProjectsSpentAmounts(projectIds: string[]): Promise<Record<string, number>> {
+  // 添加空值检查
+  if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
+    return {}
+  }
+  
   const cacheKey = `projects_spent_${projectIds.sort().join('_')}`
   const cached = getCachedData<Record<string, number>>(cacheKey)
   if (cached) return cached

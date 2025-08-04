@@ -21,7 +21,7 @@ import { UserRoles, RoleLevels } from "@/lib/data"
 // 核心模块 - 预加载（用户最常用的模块）
 import { DashboardOverviewOptimized } from "@/components/modules/dashboard-overview-optimized"
 import { BankTransactions } from "@/components/modules/bank-transactions"
-import { ProjectAccounts } from "@/components/modules/project-accounts"
+import { ProjectAccountsOptimized } from "@/components/modules/project-accounts-optimized"
 
 // 次要模块 - 懒加载（不常用的模块）
 const JournalEntries = React.lazy(() => import("@/components/modules/journal-entries").then(module => ({ default: module.JournalEntries })))
@@ -29,7 +29,7 @@ const TrialBalance = React.lazy(() => import("@/components/modules/trial-balance
 const ProfitLoss = React.lazy(() => import("@/components/modules/profit-loss").then(module => ({ default: module.ProfitLoss })))
 const BalanceSheet = React.lazy(() => import("@/components/modules/balance-sheet").then(module => ({ default: module.BalanceSheet })))
 const GeneralLedger = React.lazy(() => import("@/components/modules/general-ledger").then(module => ({ default: module.GeneralLedger })))
-const AccountSettings = React.lazy(() => import("@/components/modules/account-settings").then(module => ({ default: module.AccountSettings })))
+const AccountSettingsOptimized = React.lazy(() => import("@/components/modules/account-settings-optimized").then(module => ({ default: module.AccountSettings })))
 
 // 骨架屏组件
 const SkeletonLoader = () => (
@@ -188,7 +188,7 @@ const OptimizedModuleRenderer = React.memo(({
       case "General Ledger":
         return GeneralLedger
       case "Account Settings":
-        return AccountSettings
+        return AccountSettingsOptimized
       default:
         return null
     }
@@ -202,7 +202,7 @@ const OptimizedModuleRenderer = React.memo(({
       case "Bank Transactions":
         return <BankTransactions />
       case "Project Accounts":
-        return <ProjectAccounts />
+        return <ProjectAccountsOptimized />
       default:
         return <div className="p-6 text-center text-muted-foreground">模块未找到。</div>
     }

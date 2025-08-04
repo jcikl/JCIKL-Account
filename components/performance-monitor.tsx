@@ -8,7 +8,7 @@ import {
   Activity, 
   Clock, 
   Database, 
-  Memory, 
+  HardDrive, 
   Network, 
   RefreshCw,
   TrendingUp,
@@ -353,7 +353,7 @@ export function PerformanceMonitor() {
             title="内存使用率"
             value={metrics.memoryUsage * 100}
             unit="%"
-            icon={Memory}
+                          icon={HardDrive}
             thresholds={{ good: 70, needsImprovement: 90 }}
           />
           <MetricCard

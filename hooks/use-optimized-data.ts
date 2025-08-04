@@ -8,7 +8,8 @@ import {
   getCategories,
   getProjectsSpentAmounts,
   getTransactionStats,
-  getProjectStats
+  getProjectStats,
+  getUsers
 } from '@/lib/firebase-utils'
 import type { Transaction, Project, Account, Category } from '@/lib/data'
 
@@ -151,6 +152,15 @@ export function useOptimizedProjectStats() {
       preload: true,
       priority: 'high'
     }
+  )
+}
+
+// 新增：用户数据优化 hooks
+export function useOptimizedUsers() {
+  return useCachedData(
+    cacheKeys.users(),
+    () => getUsers(),
+    { ttl: 5 * 60 * 1000, preload: true, priority: 'medium' }
   )
 }
 

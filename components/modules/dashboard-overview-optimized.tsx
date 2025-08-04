@@ -13,10 +13,13 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/components/auth/auth-context"
 import { 
-  getTransactionsBatch, 
-  getProjectsSpentAmounts,
   clearCache 
 } from "@/lib/firebase-utils"
+import { 
+  useOptimizedTransactions, 
+  useOptimizedProjects, 
+  useOptimizedProjectSpentAmounts 
+} from "@/hooks/use-optimized-data"
 import type { Transaction, Project } from "@/lib/data"
 
 // 优化的统计卡片组件
@@ -99,56 +102,81 @@ const ProjectCard = React.memo(({
   )
 })
 
+// 优化的交易项组件
+const TransactionItem = React.memo(({ transaction }: { transaction: Transaction }) => {
+  const formatDate = React.useCallback((date: string | { seconds: number }) => {
+    if (typeof date === 'string') {
+      return new Date(date).toLocaleDateString()
+    }
+    return new Date(date.seconds * 1000).toLocaleDateString()
+  }, [])
+
+  const formatAmount = React.useCallback((transaction: Transaction) => {
+    if (transaction.income > 0) {
+      return `+$${transaction.income.toFixed(2)}`
+    }
+    if (transaction.expense > 0) {
+      return `-$${transaction.expense.toFixed(2)}`
+    }
+    return '$0.00'
+  }, [])
+
+  return (
+    <div className="flex items-center justify-between p-2 border rounded">
+      <div>
+        <p className="font-medium">{transaction.description}</p>
+        <p className="text-sm text-muted-foreground">
+          {formatDate(transaction.date)}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className={`font-medium ${
+          transaction.income > 0 ? 'text-green-600' : 'text-red-600'
+        }`}>
+          {formatAmount(transaction)}
+        </p>
+        <Badge variant="outline" className="text-xs">
+          {transaction.status}
+        </Badge>
+      </div>
+    </div>
+  )
+})
+
 export function DashboardOverviewOptimized() {
   const { currentUser, hasPermission } = useAuth()
-  const [transactions, setTransactions] = React.useState<Transaction[]>([])
-  const [projects, setProjects] = React.useState<Project[]>([])
-  const [projectSpentAmounts, setProjectSpentAmounts] = React.useState<Record<string, number>>({})
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<string | null>(null)
   const [refreshing, setRefreshing] = React.useState(false)
 
-  // 优化的数据加载函数
-  const fetchData = React.useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true)
-    } else {
-      setLoading(true)
-    }
-    setError(null)
-    
-    try {
-      // 并行加载所有数据
-      const [transactionsData, projectsData] = await Promise.all([
-        getTransactionsBatch(100, {
-          dateRange: {
-            start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 最近30天
-            end: new Date()
-          }
-        }),
-        import("@/lib/firebase-utils").then(m => m.getProjects())
-      ])
-      
-      setTransactions(transactionsData)
-      setProjects(projectsData)
-      
-      // 并行计算项目花费金额
-      if (projectsData.length > 0) {
-        const projectIds = projectsData.map(p => p.id!).filter(Boolean)
-        const spentAmounts = await getProjectsSpentAmounts(projectIds)
-        setProjectSpentAmounts(spentAmounts)
-      }
-    } catch (err: any) {
-      setError("无法加载数据: " + err.message)
-      console.error("Error fetching dashboard data:", err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+  // 使用优化的数据hooks
+  const { 
+    data: transactions, 
+    loading: transactionsLoading, 
+    error: transactionsError,
+    refetch: refetchTransactions 
+  } = useOptimizedTransactions()
+
+  const { 
+    data: projects, 
+    loading: projectsLoading, 
+    error: projectsError,
+    refetch: refetchProjects 
+  } = useOptimizedProjects()
+
+  const { 
+    data: projectSpentAmounts, 
+    loading: spentAmountsLoading, 
+    error: spentAmountsError,
+    refetch: refetchSpentAmounts 
+  } = useOptimizedProjectSpentAmounts()
+
+  // 计算加载状态
+  const loading = transactionsLoading || projectsLoading || spentAmountsLoading
+  const error = transactionsError || projectsError || spentAmountsError
 
   // 优化的统计数据计算
   const dashboardStats = React.useMemo(() => {
+    if (!transactions || !projects) return []
+
     const totalRevenue = transactions
       .filter((t) => t.income > 0)
       .reduce((sum, t) => sum + t.income, 0)
@@ -194,6 +222,8 @@ export function DashboardOverviewOptimized() {
 
   // 优化的项目列表
   const activeProjects = React.useMemo(() => {
+    if (!projects || !projectSpentAmounts) return []
+    
     return projects
       .filter(p => p.status === "Active")
       .slice(0, 6) // 只显示前6个活跃项目
@@ -204,16 +234,30 @@ export function DashboardOverviewOptimized() {
       }))
   }, [projects, projectSpentAmounts])
 
-  // 初始加载
-  React.useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  // 优化的最近交易列表
+  const recentTransactions = React.useMemo(() => {
+    if (!transactions) return []
+    
+    return transactions
+      .slice(0, 5) // 只显示最近5笔交易
+  }, [transactions])
 
-  // 刷新数据
-  const handleRefresh = React.useCallback(() => {
-    clearCache()
-    fetchData(true)
-  }, [fetchData])
+  // 优化的刷新数据函数
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await clearCache()
+      await Promise.all([
+        refetchTransactions(),
+        refetchProjects(),
+        refetchSpentAmounts()
+      ])
+    } catch (err) {
+      console.error("Error refreshing data:", err)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refetchTransactions, refetchProjects, refetchSpentAmounts])
 
   if (loading) {
     return (
@@ -228,7 +272,7 @@ export function DashboardOverviewOptimized() {
     return (
       <div className="p-6 text-center text-red-600">
         <p>错误: {error}</p>
-        <Button onClick={() => fetchData()} className="mt-2">重试</Button>
+        <Button onClick={handleRefresh} className="mt-2">重试</Button>
       </div>
     )
   }
@@ -288,38 +332,16 @@ export function DashboardOverviewOptimized() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            最近交易 (最近30天)
+            最近交易
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {transactions.slice(0, 5).map((transaction) => (
-              <div key={transaction.id} className="flex items-center justify-between p-2 border rounded">
-                <div>
-                  <p className="font-medium">{transaction.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(typeof transaction.date === 'string' ? transaction.date : transaction.date.seconds * 1000).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className={`font-medium ${
-                    transaction.income > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {transaction.income > 0 
-                      ? `+$${transaction.income.toFixed(2)}`
-                      : transaction.expense > 0
-                        ? `-$${transaction.expense.toFixed(2)}`
-                        : '$0.00'
-                    }
-                  </p>
-                  <Badge variant="outline" className="text-xs">
-                    {transaction.status}
-                  </Badge>
-                </div>
-              </div>
+            {recentTransactions.map((transaction) => (
+              <TransactionItem key={transaction.id} transaction={transaction} />
             ))}
           </div>
-          {transactions.length === 0 && (
+          {recentTransactions.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               暂无交易记录
             </div>

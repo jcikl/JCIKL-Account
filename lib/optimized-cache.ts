@@ -216,13 +216,14 @@ setInterval(() => {
 
 // 缓存键生成器
 export const cacheKeys = {
-  transactions: (filters?: any) => `transactions:${JSON.stringify(filters || {})}`,
-  projects: (filters?: any) => `projects:${JSON.stringify(filters || {})}`,
-  accounts: (filters?: any) => `accounts:${JSON.stringify(filters || {})}`,
+  transactions: () => 'transactions',
+  projects: () => 'projects',
+  accounts: () => 'accounts',
   categories: () => 'categories',
-  userProfile: (uid: string) => `user:${uid}`,
-  dashboardStats: () => 'dashboard:stats',
-  projectSpentAmounts: (projectIds: string[]) => `projects:spent:${projectIds.sort().join(',')}`,
+  projectSpentAmounts: () => 'project-spent-amounts',
+  transactionStats: () => 'transaction-stats',
+  projectStats: () => 'project-stats',
+  users: () => 'users', // 新增用户缓存键
 }
 
 // 优化的数据获取Hook
