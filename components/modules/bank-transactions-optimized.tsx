@@ -38,8 +38,8 @@ const TransactionRow = React.memo(({
   isSortEditMode: boolean
 }) => {
   const calculateNetAmount = (transaction: Transaction): number => {
-    const expense = parseFloat(transaction.expense || "0")
-    const income = parseFloat(transaction.income || "0")
+    const expense = transaction.expense || 0
+    const income = transaction.income || 0
     return income - expense
   }
 
@@ -62,10 +62,10 @@ const TransactionRow = React.memo(({
       <TableCell>{transaction.description}</TableCell>
       <TableCell>{transaction.description2 || "-"}</TableCell>
       <TableCell className="text-right">
-        {transaction.expense ? `$${parseFloat(transaction.expense).toFixed(2)}` : "-"}
+        {transaction.expense ? `$${transaction.expense.toFixed(2)}` : "-"}
       </TableCell>
       <TableCell className="text-right">
-        {transaction.income ? `$${parseFloat(transaction.income).toFixed(2)}` : "-"}
+        {transaction.income ? `$${transaction.income.toFixed(2)}` : "-"}
       </TableCell>
       <TableCell className="text-right font-medium">
         {formatNetAmount(transaction)}
@@ -81,7 +81,7 @@ const TransactionRow = React.memo(({
           {transaction.status}
         </Badge>
       </TableCell>
-      <TableCell>{transaction.reference || "-"}</TableCell>
+      <TableCell>{transaction.projectid || "-"}</TableCell>
       <TableCell>{transaction.category || "-"}</TableCell>
       {hasPermission && (
         <TableCell>
@@ -153,7 +153,7 @@ export function BankTransactionsOptimized() {
       filtered = filtered.filter(t => 
         t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.description2?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.reference?.toLowerCase().includes(searchTerm.toLowerCase())
+        t.projectid?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
@@ -185,8 +185,8 @@ export function BankTransactionsOptimized() {
     let runningBalance = 0
 
     filteredTransactions.forEach(transaction => {
-      const expense = parseFloat(transaction.expense || "0")
-      const income = parseFloat(transaction.income || "0")
+      const expense = transaction.expense || 0
+      const income = transaction.income || 0
       const netAmount = income - expense
       runningBalance += netAmount
       
@@ -459,7 +459,7 @@ export function BankTransactionsOptimized() {
                 <TableHead>状态</TableHead>
                 <TableHead>参考号</TableHead>
                 <TableHead>类别</TableHead>
-                {hasPermission && <TableHead>操作</TableHead>}
+                {hasPermission(2) && <TableHead>操作</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -471,7 +471,7 @@ export function BankTransactionsOptimized() {
                   onSelect={handleSelectTransaction}
                   onEdit={() => {}} // 待实现
                   onDelete={() => {}} // 待实现
-                  hasPermission={hasPermission}
+                  hasPermission={hasPermission(2)}
                   isSelected={selectedTransactions.has(transaction.id!)}
                   formatDate={formatDate}
                   isSortEditMode={false}

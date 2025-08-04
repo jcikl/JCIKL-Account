@@ -1,0 +1,469 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>页面性能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 3px;
+        }
+        .metric.good { border-left: 4px solid #28a745; }
+        .metric.warning { border-left: 4px solid #ffc107; }
+        .metric.poor { border-left: 4px solid #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>页面性能测试工具</h1>
+    
+    <div class="test-container">
+        <h2>测试说明</h2>
+        <p>此工具用于测试项目账户页面和账户图表页面的性能表现。</p>
+        <p>请先导航到要测试的页面，然后点击相应的测试按钮。</p>
+    </div>
+
+    <div class="test-container">
+        <h2>测试操作</h2>
+        <button class="test-button" onclick="runPerformanceTest()">运行性能测试</button>
+        <button class="test-button" onclick="clearResults()">清除结果</button>
+        <button class="test-button" onclick="exportResults()">导出结果</button>
+    </div>
+
+    <div class="test-container">
+        <h2>测试结果</h2>
+        <div id="results" class="results">等待测试...</div>
+    </div>
+
+    <script>
+        
+// 页面性能测试脚本
+(function() {
+  console.log('🚀 开始页面性能测试...');
+  
+  const testResults = {
+    timestamp: new Date().toISOString(),
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    metrics: {}
+  };
+
+  // 等待页面完全加载
+  function waitForPageLoad() {
+    return new Promise((resolve) => {
+      if (document.readyState === 'complete') {
+        resolve();
+      } else {
+        window.addEventListener('load', resolve);
+      }
+    });
+  }
+
+  // 收集性能指标
+  function collectMetrics() {
+    const navigation = performance.getEntriesByType('navigation')[0];
+    const paint = performance.getEntriesByType('paint');
+    const memory = performance.memory;
+    
+    return {
+      loadTime: navigation.loadEventEnd - navigation.loadEventStart,
+      domContentLoaded: navigation.domContentLoadedEventEnd - navigation.domContentLoadedEventStart,
+      firstPaint: paint.find(p => p.name === 'first-paint')?.startTime || 0,
+      firstContentfulPaint: paint.find(p => p.name === 'first-contentful-paint')?.startTime || 0,
+      memoryUsage: memory ? memory.usedJSHeapSize / memory.jsHeapSizeLimit : 0,
+      totalMemory: memory ? memory.jsHeapSizeLimit : 0,
+      usedMemory: memory ? memory.usedJSHeapSize : 0,
+      errors: window.performance.getEntriesByType('resource').filter(r => !r.responseEnd).length
+    };
+  }
+
+  // 测试页面交互性能
+  async function testInteractionPerformance() {
+    const interactionTests = [];
+    
+    // 测试搜索功能
+    const searchInput = document.querySelector('input[placeholder*="搜索"]');
+    if (searchInput) {
+      const startTime = performance.now();
+      searchInput.focus();
+      searchInput.value = 'test';
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const endTime = performance.now();
+      interactionTests.push({
+        name: '搜索输入响应',
+        duration: endTime - startTime
+      });
+    }
+
+    // 测试表格渲染
+    const tables = document.querySelectorAll('table');
+    if (tables.length > 0) {
+      const startTime = performance.now();
+      const rows = tables[0].querySelectorAll('tbody tr');
+      const endTime = performance.now();
+      interactionTests.push({
+        name: '表格渲染',
+        duration: endTime - startTime,
+        rowCount: rows.length
+      });
+    }
+
+    return interactionTests;
+  }
+
+  // 主测试函数
+  async function runPerformanceTest() {
+    await waitForPageLoad();
+    
+    // 等待额外时间确保所有组件都加载完成
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    const metrics = collectMetrics();
+    const interactions = await testInteractionPerformance();
+    
+    testResults.metrics = {
+      ...metrics,
+      interactions
+    };
+
+    // 检测当前页面类型
+    const projectAccountsElement = document.querySelector('[data-testid="project-accounts"]');
+    const accountChartElement = document.querySelector('[data-testid="account-chart"]');
+    
+    if (projectAccountsElement) {
+      testResults.pageType = 'project-accounts';
+    } else if (accountChartElement) {
+      testResults.pageType = 'account-chart';
+    } else {
+      testResults.pageType = 'unknown';
+    }
+
+    console.log('📊 性能测试结果:', testResults);
+    
+    // 将结果发送到服务器或保存到 localStorage
+    localStorage.setItem('performanceTestResults', JSON.stringify(testResults));
+    
+    // 显示结果在页面上
+    displayResults(testResults);
+  }
+
+  // 在页面上显示结果
+  function displayResults(results) {
+    const resultsDiv = document.createElement('div');
+    resultsDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 2px solid #007bff;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 400px;
+      z-index: 10000;
+      font-family: monospace;
+      font-size: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    const metrics = results.metrics;
+    resultsDiv.innerHTML = `
+      <h3 style="margin: 0 0 10px 0; color: #007bff;">性能测试结果</h3>
+      <p><strong>页面类型:</strong> ${results.pageType}</p>
+      <p><strong>加载时间:</strong> ${metrics.loadTime.toFixed(2)}ms</p>
+      <p><strong>DOM内容加载:</strong> ${metrics.domContentLoaded.toFixed(2)}ms</p>
+      <p><strong>首次绘制:</strong> ${metrics.firstPaint.toFixed(2)}ms</p>
+      <p><strong>首次内容绘制:</strong> ${metrics.firstContentfulPaint.toFixed(2)}ms</p>
+      <p><strong>内存使用率:</strong> ${(metrics.memoryUsage * 100).toFixed(2)}%</p>
+      <p><strong>错误数量:</strong> ${metrics.errors}</p>
+      ${metrics.interactions.map(i => `<p><strong>${i.name}:</strong> ${i.duration.toFixed(2)}ms${i.rowCount ? ` (${i.rowCount} 行)` : ''}</p>`).join('')}
+      <button onclick="this.parentElement.remove()" style="margin-top: 10px; padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">关闭</button>
+    `;
+    
+    document.body.appendChild(resultsDiv);
+  }
+
+  // 开始测试
+  runPerformanceTest();
+})();
+
+
+        function runPerformanceTest() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.textContent = '正在运行测试...';
+            
+            // 运行性能测试脚本
+            eval(`(
+// 页面性能测试脚本
+(function() {
+  console.log('🚀 开始页面性能测试...');
+  
+  const testResults = {
+    timestamp: new Date().toISOString(),
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    metrics: {}
+  };
+
+  // 等待页面完全加载
+  function waitForPageLoad() {
+    return new Promise((resolve) => {
+      if (document.readyState === 'complete') {
+        resolve();
+      } else {
+        window.addEventListener('load', resolve);
+      }
+    });
+  }
+
+  // 收集性能指标
+  function collectMetrics() {
+    const navigation = performance.getEntriesByType('navigation')[0];
+    const paint = performance.getEntriesByType('paint');
+    const memory = performance.memory;
+    
+    return {
+      loadTime: navigation.loadEventEnd - navigation.loadEventStart,
+      domContentLoaded: navigation.domContentLoadedEventEnd - navigation.domContentLoadedEventStart,
+      firstPaint: paint.find(p => p.name === 'first-paint')?.startTime || 0,
+      firstContentfulPaint: paint.find(p => p.name === 'first-contentful-paint')?.startTime || 0,
+      memoryUsage: memory ? memory.usedJSHeapSize / memory.jsHeapSizeLimit : 0,
+      totalMemory: memory ? memory.jsHeapSizeLimit : 0,
+      usedMemory: memory ? memory.usedJSHeapSize : 0,
+      errors: window.performance.getEntriesByType('resource').filter(r => !r.responseEnd).length
+    };
+  }
+
+  // 测试页面交互性能
+  async function testInteractionPerformance() {
+    const interactionTests = [];
+    
+    // 测试搜索功能
+    const searchInput = document.querySelector('input[placeholder*="搜索"]');
+    if (searchInput) {
+      const startTime = performance.now();
+      searchInput.focus();
+      searchInput.value = 'test';
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const endTime = performance.now();
+      interactionTests.push({
+        name: '搜索输入响应',
+        duration: endTime - startTime
+      });
+    }
+
+    // 测试表格渲染
+    const tables = document.querySelectorAll('table');
+    if (tables.length > 0) {
+      const startTime = performance.now();
+      const rows = tables[0].querySelectorAll('tbody tr');
+      const endTime = performance.now();
+      interactionTests.push({
+        name: '表格渲染',
+        duration: endTime - startTime,
+        rowCount: rows.length
+      });
+    }
+
+    return interactionTests;
+  }
+
+  // 主测试函数
+  async function runPerformanceTest() {
+    await waitForPageLoad();
+    
+    // 等待额外时间确保所有组件都加载完成
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    const metrics = collectMetrics();
+    const interactions = await testInteractionPerformance();
+    
+    testResults.metrics = {
+      ...metrics,
+      interactions
+    };
+
+    // 检测当前页面类型
+    const projectAccountsElement = document.querySelector('[data-testid="project-accounts"]');
+    const accountChartElement = document.querySelector('[data-testid="account-chart"]');
+    
+    if (projectAccountsElement) {
+      testResults.pageType = 'project-accounts';
+    } else if (accountChartElement) {
+      testResults.pageType = 'account-chart';
+    } else {
+      testResults.pageType = 'unknown';
+    }
+
+    console.log('📊 性能测试结果:', testResults);
+    
+    // 将结果发送到服务器或保存到 localStorage
+    localStorage.setItem('performanceTestResults', JSON.stringify(testResults));
+    
+    // 显示结果在页面上
+    displayResults(testResults);
+  }
+
+  // 在页面上显示结果
+  function displayResults(results) {
+    const resultsDiv = document.createElement('div');
+    resultsDiv.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 2px solid #007bff;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 400px;
+      z-index: 10000;
+      font-family: monospace;
+      font-size: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    const metrics = results.metrics;
+    resultsDiv.innerHTML = `
+      <h3 style="margin: 0 0 10px 0; color: #007bff;">性能测试结果</h3>
+      <p><strong>页面类型:</strong> ${results.pageType}</p>
+      <p><strong>加载时间:</strong> ${metrics.loadTime.toFixed(2)}ms</p>
+      <p><strong>DOM内容加载:</strong> ${metrics.domContentLoaded.toFixed(2)}ms</p>
+      <p><strong>首次绘制:</strong> ${metrics.firstPaint.toFixed(2)}ms</p>
+      <p><strong>首次内容绘制:</strong> ${metrics.firstContentfulPaint.toFixed(2)}ms</p>
+      <p><strong>内存使用率:</strong> ${(metrics.memoryUsage * 100).toFixed(2)}%</p>
+      <p><strong>错误数量:</strong> ${metrics.errors}</p>
+      ${metrics.interactions.map(i => `<p><strong>${i.name}:</strong> ${i.duration.toFixed(2)}ms${i.rowCount ? ` (${i.rowCount} 行)` : ''}</p>`).join('')}
+      <button onclick="this.parentElement.remove()" style="margin-top: 10px; padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">关闭</button>
+    `;
+    
+    document.body.appendChild(resultsDiv);
+  }
+
+  // 开始测试
+  runPerformanceTest();
+})();
+)`);
+            
+            // 等待结果
+            setTimeout(() => {
+                const results = localStorage.getItem('performanceTestResults');
+                if (results) {
+                    displayFormattedResults(JSON.parse(results));
+                } else {
+                    resultsDiv.textContent = '测试完成，但未找到结果。请检查控制台输出。';
+                }
+            }, 3000);
+        }
+
+        function displayFormattedResults(results) {
+            const resultsDiv = document.getElementById('results');
+            const metrics = results.metrics;
+            
+            const getPerformanceClass = (value, good, warning) => {
+                if (value <= good) return 'good';
+                if (value <= warning) return 'warning';
+                return 'poor';
+            };
+
+            let html = `
+测试时间: ${new Date(results.timestamp).toLocaleString()}
+页面类型: ${results.pageType}
+URL: ${results.url}
+
+性能指标:
+`;
+
+            // 添加性能指标
+            const metricsList = [
+                { name: '页面加载时间', value: metrics.loadTime, unit: 'ms', good: 2000, warning: 4000 },
+                { name: 'DOM内容加载', value: metrics.domContentLoaded, unit: 'ms', good: 1000, warning: 2000 },
+                { name: '首次绘制', value: metrics.firstPaint, unit: 'ms', good: 1000, warning: 2000 },
+                { name: '首次内容绘制', value: metrics.firstContentfulPaint, unit: 'ms', good: 1000, warning: 2000 },
+                { name: '内存使用率', value: metrics.memoryUsage * 100, unit: '%', good: 70, warning: 90 },
+                { name: '错误数量', value: metrics.errors, unit: '', good: 0, warning: 5 }
+            ];
+
+            metricsList.forEach(metric => {
+                const className = getPerformanceClass(metric.value, metric.good, metric.warning);
+                html += `
+<div class="metric ${className}">
+    <span>${metric.name}:</span>
+    <span>${metric.value.toFixed(2)}${metric.unit}</span>
+</div>`;
+            });
+
+            // 添加交互测试结果
+            if (metrics.interactions && metrics.interactions.length > 0) {
+                html += `\n交互性能测试:\n`;
+                metrics.interactions.forEach(interaction => {
+                    html += `<div class="metric">${interaction.name}: ${interaction.duration.toFixed(2)}ms${interaction.rowCount ? ` (${interaction.rowCount} 行)` : ''}</div>`;
+                });
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function clearResults() {
+            localStorage.removeItem('performanceTestResults');
+            document.getElementById('results').textContent = '结果已清除';
+        }
+
+        function exportResults() {
+            const results = localStorage.getItem('performanceTestResults');
+            if (results) {
+                const blob = new Blob([results], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `performance-test-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert('没有可导出的结果');
+            }
+        }
+    </script>
+</body>
+</html>

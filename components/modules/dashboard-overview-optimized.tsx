@@ -150,26 +150,14 @@ export function DashboardOverviewOptimized() {
   // 优化的统计数据计算
   const dashboardStats = React.useMemo(() => {
     const totalRevenue = transactions
-      .filter((t) => {
-        const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-        return amountStr.startsWith("+")
-      })
-      .reduce((sum, t) => {
-        const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-        return sum + Number.parseFloat(amountStr.replace(/[^0-9.-]+/g, ""))
-      }, 0)
+      .filter((t) => t.income > 0)
+      .reduce((sum, t) => sum + t.income, 0)
 
     const totalExpenses = transactions
-      .filter((t) => {
-        const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-        return amountStr.startsWith("-")
-      })
-      .reduce((sum, t) => {
-        const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-        return sum + Number.parseFloat(amountStr.replace(/[^0-9.-]+/g, ""))
-      }, 0)
+      .filter((t) => t.expense > 0)
+      .reduce((sum, t) => sum + t.expense, 0)
 
-    const netProfit = totalRevenue + totalExpenses
+    const netProfit = totalRevenue - totalExpenses
     const activeProjectsCount = projects.filter((p) => p.status === "Active").length
 
     return [
@@ -261,7 +249,7 @@ export function DashboardOverviewOptimized() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid gap-4 grid-cols-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {dashboardStats.map((stat, index) => (
           <StatCard key={index} {...stat} />
         ))}
@@ -315,12 +303,12 @@ export function DashboardOverviewOptimized() {
                 </div>
                 <div className="text-right">
                   <p className={`font-medium ${
-                    (transaction.income && parseFloat(transaction.income) > 0) ? 'text-green-600' : 'text-red-600'
+                    transaction.income > 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {transaction.income && parseFloat(transaction.income) > 0 
-                      ? `+$${parseFloat(transaction.income).toFixed(2)}`
-                      : transaction.expense 
-                        ? `-$${parseFloat(transaction.expense).toFixed(2)}`
+                    {transaction.income > 0 
+                      ? `+$${transaction.income.toFixed(2)}`
+                      : transaction.expense > 0
+                        ? `-$${transaction.expense.toFixed(2)}`
                         : '$0.00'
                     }
                   </p>

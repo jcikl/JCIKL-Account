@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useCustomAuth } from "./custom-auth-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserRoles } from "@/lib/data"
+import { UserRoles, type UserRole } from "@/lib/data"
 
 export function CustomAuthForm() {
   const { login, signup, loading } = useCustomAuth()
@@ -27,7 +27,7 @@ export function CustomAuthForm() {
       if (isLogin) {
         await login(email, password)
       } else {
-        await signup(email, password, displayName, role as UserRoles)
+        await signup(email, password, displayName, role as UserRole)
       }
     } catch (err: any) {
       setError(err.message)

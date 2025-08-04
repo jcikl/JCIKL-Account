@@ -91,11 +91,10 @@ export function GeneralLedger() {
   // 应用所有筛选条件
   const filteredTransactions = React.useMemo(() => {
     return transactions.filter((transaction) => {
-      // 基础筛选
-      const matchesAccount = selectedAccount === "all" || transaction.account.includes(selectedAccount)
+      // 基础筛选 - 移除account筛选，因为Transaction接口不再包含account属性
       const matchesSearch =
         transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transaction.account.toLowerCase().includes(searchTerm.toLowerCase())
+        (transaction.description2 && transaction.description2.toLowerCase().includes(searchTerm.toLowerCase()))
 
       // 高级筛选
       const matchesDateFrom = !filters.dateFrom || 
@@ -103,17 +102,17 @@ export function GeneralLedger() {
       const matchesDateTo = !filters.dateTo || 
         (typeof transaction.date === 'string' && transaction.date <= filters.dateTo)
       
-      const transactionAmount = transaction.debit > 0 ? transaction.debit : transaction.credit
+      const transactionAmount = transaction.expense > 0 ? transaction.expense : transaction.income
       const matchesAmountMin = !filters.amountMin || transactionAmount >= parseFloat(filters.amountMin)
       const matchesAmountMax = !filters.amountMax || transactionAmount <= parseFloat(filters.amountMax)
       
       const matchesStatus = filters.statuses.length === 0 || filters.statuses.includes(transaction.status)
       const matchesCategory = filters.categories.length === 0 || 
         (transaction.category && filters.categories.includes(transaction.category))
-      const matchesAccountFilter = filters.accounts.length === 0 || 
-        filters.accounts.includes(transaction.account)
+      // 移除account筛选，因为Transaction接口不再包含account属性
+      const matchesAccountFilter = filters.accounts.length === 0
 
-      return matchesAccount && matchesSearch && matchesDateFrom && matchesDateTo && 
+      return matchesSearch && matchesDateFrom && matchesDateTo && 
              matchesAmountMin && matchesAmountMax && matchesStatus && 
              matchesCategory && matchesAccountFilter
     })
@@ -141,12 +140,13 @@ export function GeneralLedger() {
               t.date?.seconds ? new Date(t.date.seconds * 1000).toLocaleDateString() : 'N/A',
         交易ID: t.id,
         描述: t.description,
-        账户: t.account,
-        借方: t.debit > 0 ? t.debit : '',
-        贷方: t.credit > 0 ? t.credit : '',
+        描述2: t.description2 || '',
+        支出: t.expense > 0 ? t.expense : '',
+        收入: t.income > 0 ? t.income : '',
+        净额: t.income - t.expense,
         状态: t.status,
         类别: t.category || '',
-        参考: t.reference || ''
+        项目ID: t.projectid || ''
       }))
 
       // 根据格式执行导出
@@ -201,12 +201,13 @@ export function GeneralLedger() {
       { wch: 12 }, // 日期
       { wch: 15 }, // 交易ID
       { wch: 30 }, // 描述
-      { wch: 20 }, // 账户
-      { wch: 12 }, // 借方
-      { wch: 12 }, // 贷方
+      { wch: 20 }, // 描述2
+      { wch: 12 }, // 支出
+      { wch: 12 }, // 收入
+      { wch: 12 }, // 净额
       { wch: 10 }, // 状态
       { wch: 15 }, // 类别
-      { wch: 15 }, // 参考
+      { wch: 15 }, // 项目ID
     ]
     worksheet['!cols'] = columnWidths
 
@@ -730,9 +731,9 @@ export function GeneralLedger() {
                     <TableHead>日期</TableHead>
                     <TableHead>交易ID</TableHead>
                     <TableHead>描述</TableHead>
-                    <TableHead>账户</TableHead>
-                    <TableHead className="text-right">借方</TableHead>
-                    <TableHead className="text-right">贷方</TableHead>
+                    <TableHead>描述2</TableHead>
+                    <TableHead className="text-right">支出</TableHead>
+                    <TableHead className="text-right">收入</TableHead>
                     <TableHead>状态</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -749,12 +750,12 @@ export function GeneralLedger() {
                       </TableCell>
                       <TableCell className="font-medium">{transaction.id}</TableCell>
                       <TableCell>{transaction.description}</TableCell>
-                      <TableCell>{transaction.account}</TableCell>
+                      <TableCell>{transaction.description2 || '-'}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {transaction.debit > 0 ? `$${transaction.debit.toLocaleString()}` : "-"}
+                        {transaction.expense > 0 ? `$${transaction.expense.toLocaleString()}` : "-"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {transaction.credit > 0 ? `$${transaction.credit.toLocaleString()}` : "-"}
+                        {transaction.income > 0 ? `$${transaction.income.toLocaleString()}` : "-"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={transaction.status === "Completed" ? "default" : "secondary"}>
@@ -784,26 +785,10 @@ export function GeneralLedger() {
               console.log('删除账户:', accountId)
               // 可以在这里添加账户删除逻辑
             }}
-            onAccountAdd={(accountData) => {
-              console.log('添加账户:', accountData)
-              // 创建新账户对象
-              const newAccount: Account = {
-                id: Date.now().toString(), // 临时ID，实际应该由数据库生成
-                code: accountData.code,
-                name: accountData.name,
-                type: accountData.type,
-                balance: accountData.balance,
-                financialStatement: accountData.type === "Asset" || accountData.type === "Liability" || accountData.type === "Equity" 
-                  ? "Balance Sheet" 
-                  : "Income Statement",
-                parent: accountData.parent
-              }
-              
-              // 添加到账户列表
-              setAccounts(prev => [...prev, newAccount])
-              
-              // 显示成功消息
-              alert(`成功添加账户: ${accountData.code} - ${accountData.name}`)
+            onAccountAdd={() => {
+              console.log('添加账户')
+              // 这里可以打开添加账户的对话框或导航到添加账户页面
+              // 由于AccountChart组件期望onAccountAdd是无参数的函数，我们在这里只做基本处理
             }}
           />
         </TabsContent>

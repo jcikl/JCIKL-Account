@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getTransactions, getProjects, getProjectSpentAmount, type Transaction, type Project } from "@/lib/firebase-utils"
+import { getTransactions, getProjects, getProjectSpentAmount } from "@/lib/firebase-utils"
+import type { Transaction, Project } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
 
@@ -52,24 +53,12 @@ export function DashboardOverview() {
 
   // Calculate dashboard stats based on fetched data
   const totalRevenue = transactions
-    .filter((t) => {
-      const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-      return amountStr.startsWith("+")
-    })
-    .reduce((sum, t) => {
-      const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-      return sum + Number.parseFloat(amountStr.replace(/[^0-9.-]+/g, ""))
-    }, 0)
+    .filter((t) => t.income > 0)
+    .reduce((sum, t) => sum + t.income, 0)
   const totalExpenses = transactions
-    .filter((t) => {
-      const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-      return amountStr.startsWith("-")
-    })
-    .reduce((sum, t) => {
-      const amountStr = typeof t.amount === 'string' ? t.amount : String(t.amount)
-      return sum + Number.parseFloat(amountStr.replace(/[^0-9.-]+/g, ""))
-    }, 0)
-  const netProfit = totalRevenue + totalExpenses // Expenses are negative, so add them
+    .filter((t) => t.expense > 0)
+    .reduce((sum, t) => sum + t.expense, 0)
+  const netProfit = totalRevenue - totalExpenses
   const activeProjectsCount = projects.filter((p) => p.status === "Active").length
 
   const dashboardStats = [
@@ -125,7 +114,7 @@ export function DashboardOverview() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-4 md:grid-cols-1">
+      <div className="grid gap-4 grid-cols-4 md:grid-cols-4">
         {dashboardStats.map((stat, index) => (
           <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -163,7 +152,7 @@ export function DashboardOverview() {
                     <TableHead>交易ID</TableHead>
                     <TableHead>日期</TableHead>
                     <TableHead>描述</TableHead>
-                    <TableHead>账户</TableHead>
+                    <TableHead>描述2</TableHead>
                     <TableHead>金额</TableHead>
                     <TableHead>状态</TableHead>
                   </TableRow>
@@ -181,13 +170,16 @@ export function DashboardOverview() {
                         }
                       </TableCell>
                       <TableCell>{transaction.description}</TableCell>
-                      <TableCell>{transaction.account}</TableCell>
+                      <TableCell>{transaction.description2 || '-'}</TableCell>
                       <TableCell className={
-                        (typeof transaction.amount === 'string' ? transaction.amount : String(transaction.amount)).startsWith("+") 
+                        transaction.income > 0 
                           ? "text-green-600" 
                           : "text-red-600"
                       }>
-                        {typeof transaction.amount === 'string' ? transaction.amount : String(transaction.amount)}
+                        {transaction.income > 0 
+                          ? `+$${transaction.income.toFixed(2)}` 
+                          : `-$${transaction.expense.toFixed(2)}`
+                        }
                       </TableCell>
                       <TableCell>
                         <Badge variant={transaction.status === "Completed" ? "default" : "secondary"}>

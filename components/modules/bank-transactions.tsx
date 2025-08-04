@@ -177,7 +177,6 @@ function SortableTransactionRow({
                 <Edit className="h-4 w-4 mr-2" />
                 编辑
               </DropdownMenuItem>
-              <DropdownMenuItem>复制</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600"

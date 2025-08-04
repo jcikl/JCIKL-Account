@@ -1,8 +1,9 @@
 "use client"
 
-import { AccountingDashboard } from "@/components/accounting-dashboard"
+import { AccountingDashboardOptimized } from "@/components/accounting-dashboard-optimized"
 import { AuthProvider, useAuth } from "@/components/auth/auth-context"
 import { AuthForm } from "@/components/auth/auth-form"
+import { PerformanceMonitor } from "@/components/performance-monitor"
 
 function AppContent() {
   const { currentUser, loading } = useAuth()
@@ -10,7 +11,10 @@ function AppContent() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>加载认证信息...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>加载认证信息...</p>
+        </div>
       </div>
     )
   }
@@ -19,7 +23,12 @@ function AppContent() {
     return <AuthForm />
   }
 
-  return <AccountingDashboard />
+  return (
+    <>
+      <AccountingDashboardOptimized />
+      <PerformanceMonitor />
+    </>
+  )
 }
 
 export default function Page() {

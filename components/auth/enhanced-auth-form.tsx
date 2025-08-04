@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useEnhancedAuth } from "./enhanced-auth-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserRoles } from "@/lib/data"
+import { UserRoles, type UserRole } from "@/lib/data"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -35,7 +35,7 @@ export function EnhancedAuthForm() {
         const result = await login(email, password)
         setSuccess(`登录成功！认证类型: ${result.user.authType === 'firebase' ? 'Firebase Authentication' : '自定义认证'}`)
       } else {
-        const result = await signup(email, password, displayName, role as UserRoles, useFirebaseAuth)
+        const result = await signup(email, password, displayName, role as UserRole, useFirebaseAuth)
         setSuccess(`注册成功！认证类型: ${result.user.authType === 'firebase' ? 'Firebase Authentication' : '自定义认证'}`)
       }
     } catch (err: any) {
