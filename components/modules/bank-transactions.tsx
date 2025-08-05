@@ -25,8 +25,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects, addTransactionWithSequence, reorderTransactions, autoMatchAndUpdateProjectIds } from "@/lib/firebase-utils"
-import type { Transaction, Account, Project } from "@/lib/data"
+import { addDocument, getTransactions, deleteDocument, updateDocument, getAccounts, getProjects, addTransactionWithSequence, reorderTransactions, autoMatchAndUpdateProjectIds, getBankAccounts, getTransactionsByBankAccount, addTransactionWithBankAccount, initializeDefaultBankAccounts } from "@/lib/firebase-utils"
+import type { Transaction, Account, Project, BankAccount } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
@@ -35,6 +35,8 @@ import { PasteImportDialog } from "./paste-import-dialog"
 import { getCategories } from "@/lib/firebase-utils"
 import { type Category } from "@/lib/data"
 import { matchProjectIdByName, batchMatchProjectIds } from "@/lib/project-utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CreditCard } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -81,6 +83,7 @@ function SortableTransactionRow({
   hasPermission,
   isSelected,
   formatDate,
+  formatCurrency,
   isSortEditMode
 }: { 
   transaction: Transaction
@@ -91,6 +94,7 @@ function SortableTransactionRow({
   hasPermission: boolean
   isSelected: boolean
   formatDate: (date: string | { seconds: number; nanoseconds: number }) => string
+  formatCurrency: (amount: number, currency?: string) => string
   isSortEditMode: boolean
 }) {
   const {
@@ -147,10 +151,10 @@ function SortableTransactionRow({
       <TableCell>{transaction.description}</TableCell>
       <TableCell>{transaction.description2 || "-"}</TableCell>
       <TableCell className="text-red-600 font-medium">
-        ${transaction.expense.toFixed(2)}
+        {formatCurrency(transaction.expense)}
       </TableCell>
       <TableCell className="text-green-600 font-medium">
-        ${transaction.income.toFixed(2)}
+        {formatCurrency(transaction.income)}
       </TableCell>
       <TableCell
         className={
@@ -159,7 +163,7 @@ function SortableTransactionRow({
             : "text-red-600 font-medium"
         }
       >
-        {runningBalance >= 0 ? `+$${runningBalance.toFixed(2)}` : `-$${Math.abs(runningBalance).toFixed(2)}`}
+        {runningBalance >= 0 ? `+${formatCurrency(runningBalance)}` : `-${formatCurrency(Math.abs(runningBalance))}`}
       </TableCell>
       <TableCell>
         <Badge variant={transaction.status === "Completed" ? "default" : "secondary"}>
@@ -253,6 +257,11 @@ export function BankTransactions() {
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(50)
   const [totalPages, setTotalPages] = React.useState(1)
+  
+  // 银行账户管理状态
+  const [bankAccounts, setBankAccounts] = React.useState<BankAccount[]>([])
+  const [selectedBankAccountId, setSelectedBankAccountId] = React.useState<string>("")
+  const [bankAccountsLoading, setBankAccountsLoading] = React.useState(true)
   
   // 项目匹配状态
   const [isMatchingProjects, setIsMatchingProjects] = React.useState(false)
@@ -469,6 +478,20 @@ export function BankTransactions() {
     fetchCategories()
   }, [fetchTransactions, fetchAccounts, fetchProjects, fetchCategories])
 
+  // 加载银行账户
+  React.useEffect(() => {
+    if (currentUser) {
+      loadBankAccounts()
+    }
+  }, [currentUser])
+
+  // 当选择的银行账户改变时，重新加载交易
+  React.useEffect(() => {
+    if (selectedBankAccountId) {
+      loadTransactionsByBankAccount(selectedBankAccountId)
+    }
+  }, [selectedBankAccountId])
+
   // 计算交易净额
   const calculateNetAmount = (transaction: Transaction): number => {
     return transaction.income - transaction.expense
@@ -516,6 +539,27 @@ export function BankTransactions() {
       })
     }
     return 'N/A'
+  }
+
+  // 货币格式化函数
+  const formatCurrency = (amount: number, currency: string = "CNY"): string => {
+    const currencySymbols: { [key: string]: string } = {
+      'MYR': 'RM',
+      'USD': '$',
+      'EUR': '€',
+      'GBP': '£',
+      'JPY': '¥',
+      'SGD': 'S$',
+      'HKD': 'HK$',
+      'KRW': '₩',
+      'AUD': 'A$',
+      'CAD': 'C$',
+      'CHF': 'CHF',
+      'CNY': '¥'
+    }
+    
+    const symbol = currencySymbols[currency] || '¥'
+    return `${symbol}${amount.toFixed(2)}`
   }
 
   // Get project category for a transaction
@@ -1021,6 +1065,13 @@ export function BankTransactions() {
         transactionData.category = formData.category
       }
 
+      // 添加银行账户信息
+      if (selectedBankAccountId) {
+        transactionData.bankAccountId = selectedBankAccountId
+        const selectedAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId)
+        transactionData.bankAccountName = selectedAccount?.name || ""
+      }
+
       console.log('=== 构建的交易数据 ===')
       console.log('处理后的交易数据:', transactionData)
       console.log('日期格式:', dateStr)
@@ -1030,6 +1081,7 @@ export function BankTransactions() {
       console.log('状态:', formData.status)
       console.log('项目ID:', formData.projectid)
       console.log('分类:', formData.category)
+      console.log('银行账户ID:', selectedBankAccountId)
 
       if (isEditMode && editingTransaction?.id) {
         console.log('=== 更新交易记录 ===')
@@ -1044,17 +1096,32 @@ export function BankTransactions() {
       } else {
         console.log('=== 添加新交易记录 ===')
         console.log('添加数据:', transactionData)
-        // 使用新的序号系统添加交易
-        await addTransactionWithSequence(transactionData)
-        console.log('交易添加完成')
-        toast({
-          title: "成功",
-          description: "交易已添加并分配序号"
-        })
+        
+        if (selectedBankAccountId) {
+          // 使用银行账户专用函数添加交易
+          await addTransactionWithBankAccount(transactionData, selectedBankAccountId)
+          console.log('交易添加完成（关联到银行账户）')
+          toast({
+            title: "成功",
+            description: "交易已添加并关联到银行账户"
+          })
+        } else {
+          // 使用原有的序号系统添加交易
+          await addTransactionWithSequence(transactionData)
+          console.log('交易添加完成')
+          toast({
+            title: "成功",
+            description: "交易已添加并分配序号"
+          })
+        }
       }
 
       console.log('=== 操作完成，开始刷新数据 ===')
-      await fetchTransactions()
+      if (selectedBankAccountId) {
+        await loadTransactionsByBankAccount(selectedBankAccountId)
+      } else {
+        await fetchTransactions()
+      }
       console.log('数据刷新完成')
       setIsFormOpen(false)
       setIsEditMode(false)
@@ -1266,19 +1333,39 @@ export function BankTransactions() {
         transactionData.description2 = values[2]
       }
 
+      // 添加银行账户信息
+      if (selectedBankAccountId) {
+        transactionData.bankAccountId = selectedBankAccountId
+        const selectedAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId)
+        transactionData.bankAccountName = selectedAccount?.name || ""
+      }
+
       return transactionData
     })
 
     try {
       for (const data of newTransactionsData) {
-        // 使用序号系统添加新交易
-        await addTransactionWithSequence(data)
+        // 根据是否选中银行账户选择不同的添加方式
+        if (selectedBankAccountId) {
+          // 使用银行账户专用函数添加交易
+          await addTransactionWithBankAccount(data, selectedBankAccountId)
+        } else {
+          // 使用序号系统添加新交易
+          await addTransactionWithSequence(data)
+        }
       }
-      await fetchTransactions()
+      
+      // 根据当前选中的银行账户刷新数据
+      if (selectedBankAccountId) {
+        await loadTransactionsByBankAccount(selectedBankAccountId)
+      } else {
+        await fetchTransactions()
+      }
+      
       setIsImportOpen(false)
       toast({
         title: "成功",
-        description: `已导入 ${newTransactionsData.length} 笔交易并分配序号`
+        description: `已导入 ${newTransactionsData.length} 笔交易${selectedBankAccountId ? ` 到 ${bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name}` : ' 并分配序号'}`
       })
     } catch (err: any) {
       setError("导入交易失败: " + err.message)
@@ -1393,6 +1480,13 @@ export function BankTransactions() {
           transactionData.category = parsed.category
         }
 
+        // 添加银行账户信息
+        if (selectedBankAccountId) {
+          transactionData.bankAccountId = selectedBankAccountId
+          const selectedAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId)
+          transactionData.bankAccountName = selectedAccount?.name || ""
+        }
+
         if (parsed.isUpdate) {
           // 查找现有交易进行更新
           const existingTransaction = transactions.find(t => 
@@ -1406,16 +1500,29 @@ export function BankTransactions() {
             updatedCount++
           }
         } else {
-          // 使用序号系统添加新交易
-          await addTransactionWithSequence(transactionData)
-          addedCount++
+          // 根据是否选中银行账户选择不同的添加方式
+          if (selectedBankAccountId) {
+            // 使用银行账户专用函数添加交易
+            await addTransactionWithBankAccount(transactionData, selectedBankAccountId)
+            addedCount++
+          } else {
+            // 使用序号系统添加新交易
+            await addTransactionWithSequence(transactionData)
+            addedCount++
+          }
         }
       }
 
-      await fetchTransactions()
+      // 根据当前选中的银行账户刷新数据
+      if (selectedBankAccountId) {
+        await loadTransactionsByBankAccount(selectedBankAccountId)
+      } else {
+        await fetchTransactions()
+      }
+      
       toast({
         title: "导入成功",
-        description: `已导入 ${addedCount} 笔新交易，更新 ${updatedCount} 笔交易`
+        description: `已导入 ${addedCount} 笔新交易，更新 ${updatedCount} 笔交易${selectedBankAccountId ? ` 到 ${bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name}` : ''}`
       })
     } catch (err: any) {
       setError("导入交易失败: " + err.message)
@@ -1543,6 +1650,58 @@ export function BankTransactions() {
     setCurrentPage(1) // 重置到第一页
   }
 
+  // 加载银行账户
+  const loadBankAccounts = React.useCallback(async () => {
+    if (!currentUser) return
+    
+    try {
+      setBankAccountsLoading(true)
+      let accounts = await getBankAccounts()
+      
+      // 如果没有银行账户，自动初始化默认账户
+      if (accounts.length === 0) {
+        console.log('没有找到银行账户，正在初始化默认账户...')
+        await initializeDefaultBankAccounts(currentUser.uid)
+        accounts = await getBankAccounts()
+        console.log('默认银行账户初始化完成，账户数量:', accounts.length)
+      }
+      
+      setBankAccounts(accounts)
+      
+      // 如果有银行账户，选择第一个活跃的账户
+      if (accounts.length > 0) {
+        const activeAccount = accounts.find(acc => acc.isActive) || accounts[0]
+        setSelectedBankAccountId(activeAccount.id!)
+      }
+    } catch (error) {
+      console.error("Error loading bank accounts:", error)
+      setError("Failed to load bank accounts")
+    } finally {
+      setBankAccountsLoading(false)
+    }
+  }, [currentUser])
+
+  // 加载指定银行账户的交易
+  const loadTransactionsByBankAccount = React.useCallback(async (bankAccountId: string) => {
+    if (!currentUser || !bankAccountId) return
+    
+    try {
+      setLoading(true)
+      const transactions = await getTransactionsByBankAccount(bankAccountId)
+      setTransactions(transactions)
+    } catch (error) {
+      console.error("Error loading transactions:", error)
+      setError("Failed to load transactions")
+    } finally {
+      setLoading(false)
+    }
+  }, [currentUser])
+
+  // 处理银行账户切换
+  const handleBankAccountChange = (bankAccountId: string) => {
+    setSelectedBankAccountId(bankAccountId)
+  }
+
   if (loading) {
     return <div className="p-6 text-center">加载银行交易...</div>
   }
@@ -1557,6 +1716,46 @@ export function BankTransactions() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">银行交易</h1>
           <p className="text-muted-foreground">轻松管理和导入您的银行交易，按项目账户分类管理。</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => window.location.href = "/bank-account-management"}>
+            <CreditCard className="h-4 w-4 mr-2" />
+            管理银行账户
+          </Button>
+        </div>
+      </div>
+
+      {/* 银行账户标签页 */}
+      {bankAccounts.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">银行账户</h2>
+          </div>
+          <Tabs value={selectedBankAccountId} onValueChange={handleBankAccountChange}>
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {bankAccounts.map((account) => (
+                <TabsTrigger 
+                  key={account.id} 
+                  value={account.id!}
+                  className="flex items-center space-x-2"
+                  disabled={!account.isActive}
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span className="truncate">{account.name}</span>
+                  {!account.isActive && (
+                    <Badge variant="secondary" className="text-xs">已停用</Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
+      {/* 操作按钮 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">交易管理</h2>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportTransactions}>
@@ -1649,30 +1848,46 @@ export function BankTransactions() {
       <div className="grid gap-4 grid-cols-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">总支出</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {selectedBankAccountId ? '账户支出' : '总支出'}
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">${totalExpenses.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
+            {selectedBankAccountId && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">总收入</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {selectedBankAccountId ? '账户收入' : '总收入'}
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${totalIncome.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</div>
+            {selectedBankAccountId && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">盈余/赤字</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {selectedBankAccountId ? '账户净额' : '盈余/赤字'}
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${netAmount >= 0 ? '+' : ''}${netAmount.toFixed(2)}
+              {netAmount >= 0 ? '+' : ''}{formatCurrency(Math.abs(netAmount))}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {netAmount >= 0 ? '盈余' : '赤字'}
@@ -1681,15 +1896,17 @@ export function BankTransactions() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">累计余额</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {selectedBankAccountId ? '账户余额' : '累计余额'}
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${totalRunningBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${totalRunningBalance.toFixed(2)}
+              {formatCurrency(totalRunningBalance)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              初始余额: ${initialBalance.toFixed(2)} • 净额: ${totalNetAmount.toFixed(2)}
+              初始余额: {formatCurrency(initialBalance)} • 净额: {formatCurrency(totalNetAmount)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               当前页: {currentPage}/{totalPages}
@@ -2026,6 +2243,7 @@ export function BankTransactions() {
                             hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
                             isSelected={selectedTransactions.has(transaction.id!)}
                             formatDate={formatDate}
+                            formatCurrency={formatCurrency}
                             isSortEditMode={isSortEditMode}
                           />
                         )
@@ -2204,6 +2422,7 @@ export function BankTransactions() {
                         hasPermission={hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT])}
                         isSelected={selectedTransactions.has(transaction.id!)}
                         formatDate={formatDate}
+                        formatCurrency={formatCurrency}
                         isSortEditMode={isSortEditMode}
                       />
                     )
@@ -2557,6 +2776,8 @@ export function BankTransactions() {
         onOpenChange={setIsPasteImportOpen}
         existingTransactions={transactions}
         onImport={handleImportTransactions}
+        selectedBankAccountId={selectedBankAccountId}
+        bankAccounts={bankAccounts}
       />
 
       {/* 项目匹配结果对话框 */}

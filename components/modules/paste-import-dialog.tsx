@@ -15,7 +15,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import type { Transaction } from "@/lib/data"
+import type { Transaction, BankAccount } from "@/lib/data"
+import { getBankAccounts } from "@/lib/firebase-utils"
+import { useAuth } from "@/components/auth/auth-context"
 
 const pasteImportFormSchema = z.object({
   data: z.string().min(1, "请输入要导入的数据"),
@@ -24,7 +26,8 @@ const pasteImportFormSchema = z.object({
   }),
   skipHeader: z.boolean().default(true),
   updateExisting: z.boolean().default(false),
-  validateData: z.boolean().default(true)
+  validateData: z.boolean().default(true),
+  bankAccountId: z.string().optional()
 })
 
 type PasteImportFormData = z.infer<typeof pasteImportFormSchema>
@@ -39,6 +42,8 @@ interface ParsedTransaction {
   payer?: string
   projectid?: string
   category?: string
+  bankAccountId?: string
+  bankAccountName?: string
   isValid: boolean
   errors: string[]
   isUpdate?: boolean
@@ -50,18 +55,25 @@ interface PasteImportDialogProps {
   onOpenChange: (open: boolean) => void
   existingTransactions: Transaction[]
   onImport: (transactions: ParsedTransaction[]) => void
+  selectedBankAccountId?: string
+  bankAccounts?: BankAccount[]
 }
 
 export function PasteImportDialog({
   open,
   onOpenChange,
   existingTransactions,
-  onImport
+  onImport,
+  selectedBankAccountId,
+  bankAccounts = []
 }: PasteImportDialogProps) {
   const { toast } = useToast()
+  const { currentUser } = useAuth()
   const [parsedTransactions, setParsedTransactions] = React.useState<ParsedTransaction[]>([])
   const [isParsing, setIsParsing] = React.useState(false)
   const [parseError, setParseError] = React.useState<string>("")
+  const [localBankAccounts, setLocalBankAccounts] = React.useState<BankAccount[]>(bankAccounts)
+  const [bankAccountsLoading, setBankAccountsLoading] = React.useState(false)
 
   const form = useForm<PasteImportFormData>({
     resolver: zodResolver(pasteImportFormSchema),
@@ -70,9 +82,38 @@ export function PasteImportDialog({
       format: "csv",
       skipHeader: true,
       updateExisting: false,
-      validateData: true
+      validateData: true,
+      bankAccountId: selectedBankAccountId || ""
     }
   })
+
+  // 加载银行账户
+  const loadBankAccounts = React.useCallback(async () => {
+    if (!currentUser) return
+    
+    try {
+      setBankAccountsLoading(true)
+      const accounts = await getBankAccounts()
+      setLocalBankAccounts(accounts)
+      
+      // 如果没有传入选中的银行账户，选择第一个活跃的账户
+      if (!selectedBankAccountId && accounts.length > 0) {
+        const activeAccount = accounts.find(acc => acc.isActive) || accounts[0]
+        form.setValue("bankAccountId", activeAccount.id!)
+      }
+    } catch (error) {
+      console.error("Error loading bank accounts:", error)
+    } finally {
+      setBankAccountsLoading(false)
+    }
+  }, [currentUser, selectedBankAccountId, form])
+
+  // 当对话框打开时加载银行账户
+  React.useEffect(() => {
+    if (open && currentUser) {
+      loadBankAccounts()
+    }
+  }, [open, currentUser, loadBankAccounts])
 
   // 解析粘贴的数据
   const parseData = React.useCallback((data: string, format: string, skipHeader: boolean) => {
@@ -212,6 +253,10 @@ export function PasteImportDialog({
           }
         }
 
+        // 获取选中的银行账户信息
+        const selectedBankAccountId = form.getValues("bankAccountId")
+        const selectedAccount = localBankAccounts.find(acc => acc.id === selectedBankAccountId)
+
         return {
           date,
           description: description || "",
@@ -222,6 +267,8 @@ export function PasteImportDialog({
           payer: payer || "",
           projectid: projectid || "",
           category: category || "",
+          bankAccountId: selectedBankAccountId,
+          bankAccountName: selectedAccount?.name || "",
           isValid: errors.length === 0,
           errors,
           isUpdate,
@@ -337,6 +384,44 @@ export function PasteImportDialog({
                     </Select>
                     <FormDescription>
                       选择您粘贴的数据格式
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="bankAccountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>目标银行账户 *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger disabled={bankAccountsLoading}>
+                          <SelectValue placeholder={bankAccountsLoading ? "加载中..." : "选择银行账户"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {localBankAccounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id!}>
+                            <div className="flex items-center space-x-2">
+                              <span>{account.name}</span>
+                              <Badge variant="outline" className="text-xs">
+                                {account.currency}
+                              </Badge>
+                              {!account.isActive && (
+                                <Badge variant="secondary" className="text-xs">
+                                  已停用
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      选择要将交易记录导入到的银行账户
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

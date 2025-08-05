@@ -65,7 +65,77 @@ export interface Transaction {
   category?: string
   sequenceNumber?: number // 排列序号，用于存储到Firebase
   createdByUid: string // Track who created the transaction
+  bankAccountId?: string // 新增：关联的银行账户ID
+  bankAccountName?: string // 新增：银行账户名称（用于显示）
 }
+
+// 银行账户接口
+export interface BankAccount {
+  id?: string // Firestore document ID
+  name: string // 银行账户名称，例如："工商银行主账户"
+  accountNumber?: string // 银行账号
+  bankName?: string // 银行名称
+  balance: number // 账户余额
+  currency: string // 货币类型，默认"CNY"
+  isActive: boolean // 是否启用
+  createdAt: string
+  updatedAt: string
+  createdByUid: string // 创建者UID
+}
+
+// 货币类型定义
+export const CURRENCY_TYPES = {
+  CNY: "人民币 (CNY)",
+  USD: "美元 (USD)",
+  EUR: "欧元 (EUR)",
+  GBP: "英镑 (GBP)",
+  JPY: "日元 (JPY)",
+  MYR: "马来西亚林吉特 (MYR)",
+  SGD: "新加坡元 (SGD)",
+  HKD: "港币 (HKD)",
+  KRW: "韩元 (KRW)",
+  AUD: "澳元 (AUD)",
+  CAD: "加拿大元 (CAD)",
+  CHF: "瑞士法郎 (CHF)"
+} as const
+
+export type CurrencyType = keyof typeof CURRENCY_TYPES
+
+// 默认银行账户配置
+export const DEFAULT_BANK_ACCOUNTS: Omit<BankAccount, "id" | "createdAt" | "updatedAt" | "createdByUid">[] = [
+  {
+    name: "工商银行主账户",
+    bankName: "中国工商银行",
+    accountNumber: "6222********1234",
+    balance: 0,
+    currency: "CNY",
+    isActive: true
+  },
+  {
+    name: "建设银行账户",
+    bankName: "中国建设银行", 
+    accountNumber: "6217********5678",
+    balance: 0,
+    currency: "CNY",
+    isActive: true
+  },
+  {
+    name: "农业银行账户",
+    bankName: "中国农业银行",
+    accountNumber: "6228********9012", 
+    balance: 0,
+    currency: "CNY",
+    isActive: true
+  },
+  {
+    name: "马来西亚银行账户",
+    bankName: "马来西亚银行",
+    accountNumber: "1234********5678",
+    balance: 0,
+    currency: "MYR",
+    isActive: true
+  }
+]
 
 export interface Account {
   id?: string // Firestore document ID

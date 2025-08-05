@@ -26,14 +26,14 @@ import {
   deleteDocument,
   getUsers,
   updateDocument,
-  type Account,
-  type UserProfile,
 } from "@/lib/firebase-utils"
+import type { Account, UserProfile } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
-import { UserRoles, RoleLevels } from "@/lib/data"
+import { UserRoles, RoleLevels, type UserRole } from "@/lib/data"
 import { auth } from "@/lib/firebase"
 import { createUserWithEmailAndPassword } from "firebase/auth"
 import { CategoryManagement } from "./category-management"
+import { LinksManager } from "./links-manager";
 
 export function AccountSettings() {
   const { currentUser, hasPermission } = useAuth()
@@ -52,7 +52,7 @@ export function AccountSettings() {
   const [inviteEmail, setInviteEmail] = React.useState("")
   const [invitePassword, setInvitePassword] = React.useState("")
   const [inviteDisplayName, setInviteDisplayName] = React.useState("")
-  const [inviteRole, setInviteRole] = React.useState<UserProfile["role"]>(UserRoles.ASSISTANT_VICE_PRESIDENT)
+  const [inviteRole, setInviteRole] = React.useState<UserRole>(UserRoles.ASSISTANT_VICE_PRESIDENT as UserRole);
 
   const fetchSettingsData = React.useCallback(async () => {
     setLoading(true)
@@ -135,7 +135,7 @@ export function AccountSettings() {
       setInviteEmail("")
       setInvitePassword("")
       setInviteDisplayName("")
-      setInviteRole(UserRoles.ASSISTANT_VICE_PRESIDENT)
+      setInviteRole(UserRoles.ASSISTANT_VICE_PRESIDENT as UserRole)
       setIsInviteUserOpen(false)
     } catch (err: any) {
       setError("邀请用户失败: " + err.message)
@@ -147,7 +147,7 @@ export function AccountSettings() {
     const email = "dev@company.com"
     const password = "123456"
     const displayName = "Dev Test User"
-    const role = UserRoles.TREASURER
+    const role = UserRoles.TREASURER as UserRole;
 
     if (!currentUser || !hasPermission(RoleLevels[UserRoles.TREASURER])) {
       alert("您没有权限执行此操作。")
@@ -238,6 +238,7 @@ export function AccountSettings() {
         <TabsList>
           <TabsTrigger value="accounts">账户图表</TabsTrigger>
           <TabsTrigger value="categories">收支分类</TabsTrigger>
+          <TabsTrigger value="links">链接管理</TabsTrigger>
           {hasPermission(RoleLevels[UserRoles.TREASURER]) && ( // Level 1 can access company settings
             <TabsTrigger value="company">公司设置</TabsTrigger>
           )}
@@ -399,6 +400,10 @@ export function AccountSettings() {
 
         <TabsContent value="categories" className="space-y-4">
           <CategoryManagement />
+        </TabsContent>
+
+        <TabsContent value="links" className="space-y-4">
+          <LinksManager />
         </TabsContent>
 
         {hasPermission(RoleLevels[UserRoles.TREASURER]) && ( // Level 1 can access company settings
@@ -599,7 +604,7 @@ export function AccountSettings() {
                             <Label htmlFor="invite-role">角色</Label>
                             <Select
                               value={inviteRole}
-                              onValueChange={(value) => setInviteRole(value as UserProfile["role"])}
+                              onValueChange={(value) => setInviteRole(value as UserRole)}
                             >
                               <SelectTrigger id="invite-role">
                                 <SelectValue placeholder="选择角色" />
@@ -670,10 +675,10 @@ export function AccountSettings() {
                           <Badge variant="default">活跃</Badge>
                         </TableCell>
                         <TableCell>
-                          {typeof user.lastLogin === 'string' 
+                          {typeof user.lastLogin === 'string'
                             ? new Date(user.lastLogin).toLocaleString()
-                            : user.lastLogin?.seconds 
-                              ? new Date(user.lastLogin.seconds * 1000).toLocaleString()
+                            : (user.lastLogin && typeof user.lastLogin === 'object' && 'seconds' in user.lastLogin && typeof (user.lastLogin as { seconds: number }).seconds === 'number')
+                              ? new Date((user.lastLogin as { seconds: number }).seconds * 1000).toLocaleString()
                               : 'N/A'
                           }
                         </TableCell>

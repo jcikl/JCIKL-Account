@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   BarChart3,
+  Building2,
   Calculator,
   CreditCard,
   FileText,
@@ -24,6 +25,8 @@ import { ProfitLoss } from "@/components/modules/profit-loss"
 import { BalanceSheet } from "@/components/modules/balance-sheet"
 import { GeneralLedger } from "@/components/modules/general-ledger"
 import { AccountSettings } from "@/components/modules/account-settings"
+import { BankAccountManagement } from "@/components/modules/bank-account-management"
+import { BankTransactionsMultiAccountAdvanced } from "@/components/modules/bank-transactions-multi-account-advanced"
 import { useAuth } from "@/components/auth/auth-context"
 import { UserRoles, RoleLevels } from "@/lib/data"
 
@@ -52,6 +55,12 @@ const navigationData = {
     },
   ],
   accounts: [
+    {
+      title: "Bank Account Management",
+      url: "#",
+      icon: Building2,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT], // Level 3
+    },
     {
       title: "Project Accounts",
       url: "#",
@@ -104,7 +113,9 @@ export function AccountingDashboard() {
       case "Dashboard":
         return <DashboardOverview />
       case "Bank Transactions":
-        return <BankTransactions />
+        return hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) ? <BankTransactionsMultiAccountAdvanced /> : <NoPermissionPage />
+      case "Bank Account Management":
+        return hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) ? <BankAccountManagement /> : <NoPermissionPage />
       case "Project Accounts":
         return <ProjectAccounts />
       case "Journal Entries":

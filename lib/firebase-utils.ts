@@ -1,7 +1,7 @@
 // lib/firebase-utils.ts
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, getDoc, orderBy, limit, startAfter, onSnapshot, getCountFromServer, Query, writeBatch } from "firebase/firestore"
 import { db } from "./firebase"
-import type { Account, JournalEntry, Project, Transaction, UserProfile, Category } from "./data"
+import type { Account, JournalEntry, Project, Transaction, UserProfile, Category, BankAccount } from "./data"
 import * as React from "react"
 
 // Generic CRUD operations
@@ -1472,5 +1472,296 @@ export async function autoMatchAndUpdateProjectIds(
   return {
     updatedCount: transactionsToUpdate.length,
     matchedTransactions
+  }
+}
+
+// ==================== 银行账户相关函数 ====================
+
+/**
+ * 获取所有银行账户
+ */
+export async function getBankAccounts(): Promise<BankAccount[]> {
+  try {
+    const q = query(collection(db, "bankAccounts"), orderBy("name", "asc"))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as BankAccount)
+  } catch (error) {
+    console.error('Error getting bank accounts:', error)
+    throw new Error(`Failed to get bank accounts: ${error}`)
+  }
+}
+
+/**
+ * 根据ID获取银行账户
+ */
+export async function getBankAccountById(id: string): Promise<BankAccount | null> {
+  try {
+    const docRef = doc(db, "bankAccounts", id)
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as BankAccount
+    }
+    return null
+  } catch (error) {
+    console.error('Error getting bank account by ID:', error)
+    throw new Error(`Failed to get bank account: ${error}`)
+  }
+}
+
+/**
+ * 添加银行账户
+ */
+export async function addBankAccount(bankAccountData: Omit<BankAccount, "id">): Promise<string> {
+  try {
+    console.log('=== addBankAccount 调试信息 ===')
+    console.log('银行账户数据:', bankAccountData)
+    console.log('数据库实例:', db)
+    
+    const docRef = await addDoc(collection(db, "bankAccounts"), {
+      ...bankAccountData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+    
+    console.log('银行账户创建成功，文档ID:', docRef.id)
+    return docRef.id
+  } catch (error) {
+    console.error('Error adding bank account:', error)
+    console.error('错误详情:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      code: (error as any)?.code,
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    throw new Error(`Failed to add bank account: ${error}`)
+  }
+}
+
+/**
+ * 更新银行账户
+ */
+export async function updateBankAccount(id: string, bankAccountData: Partial<Omit<BankAccount, "id">>): Promise<void> {
+  try {
+    const docRef = doc(db, "bankAccounts", id)
+    await updateDoc(docRef, {
+      ...bankAccountData,
+      updatedAt: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Error updating bank account:', error)
+    throw new Error(`Failed to update bank account: ${error}`)
+  }
+}
+
+/**
+ * 删除银行账户
+ */
+export async function deleteBankAccount(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, "bankAccounts", id)
+    await deleteDoc(docRef)
+  } catch (error) {
+    console.error('Error deleting bank account:', error)
+    throw new Error(`Failed to delete bank account: ${error}`)
+  }
+}
+
+/**
+ * 检查银行账户名称是否存在
+ */
+export async function checkBankAccountNameExists(name: string): Promise<boolean> {
+  try {
+    const q = query(collection(db, "bankAccounts"), where("name", "==", name))
+    const querySnapshot = await getDocs(q)
+    return !querySnapshot.empty
+  } catch (error) {
+    console.error('Error checking bank account name existence:', error)
+    throw new Error(`Failed to check bank account name existence: ${error}`)
+  }
+}
+
+/**
+ * 根据银行账户ID获取交易记录
+ */
+export async function getTransactionsByBankAccount(bankAccountId: string): Promise<Transaction[]> {
+  try {
+    // First try with sequenceNumber ordering
+    const q = query(
+      collection(db, "transactions"),
+      where("bankAccountId", "==", bankAccountId),
+      orderBy("sequenceNumber", "asc")
+    )
+    const querySnapshot = await getDocs(q)
+    const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+    
+    // 如果所有交易都没有序号，按日期排序
+    const hasSequenceNumbers = transactions.some(t => t.sequenceNumber)
+    if (!hasSequenceNumbers) {
+      // Temporarily remove orderBy to avoid index requirement
+      const dateQuery = query(
+        collection(db, "transactions"),
+        where("bankAccountId", "==", bankAccountId)
+      )
+      const dateSnapshot = await getDocs(dateQuery)
+      const transactionsWithoutOrder = dateSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+      
+      // Sort in memory instead of in Firestore
+      return transactionsWithoutOrder.sort((a, b) => {
+        const dateA = new Date(a.date).getTime()
+        const dateB = new Date(b.date).getTime()
+        return dateB - dateA // Descending order
+      })
+    }
+    
+    return transactions
+  } catch (error) {
+    // 如果序号排序失败，回退到日期排序
+    console.warn('序号排序失败，回退到日期排序:', error)
+    // Temporarily remove orderBy to avoid index requirement
+    const q = query(
+      collection(db, "transactions"),
+      where("bankAccountId", "==", bankAccountId)
+    )
+    const querySnapshot = await getDocs(q)
+    const transactions = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Transaction)
+    
+    // Sort in memory instead of in Firestore
+    return transactions.sort((a, b) => {
+      const dateA = new Date(a.date).getTime()
+      const dateB = new Date(b.date).getTime()
+      return dateB - dateA // Descending order
+    })
+  }
+}
+
+/**
+ * 添加交易记录并指定银行账户
+ */
+export async function addTransactionWithBankAccount(
+  transactionData: Omit<Transaction, "id" | "sequenceNumber">,
+  bankAccountId: string
+): Promise<string> {
+  try {
+    // 获取银行账户信息
+    const bankAccount = await getBankAccountById(bankAccountId)
+    if (!bankAccount) {
+      throw new Error(`Bank account with ID ${bankAccountId} not found`)
+    }
+
+    // 获取下一个序号
+    const nextSequenceNumber = await getNextSequenceNumber()
+
+    // 添加交易记录
+    const docRef = await addDoc(collection(db, "transactions"), {
+      ...transactionData,
+      bankAccountId,
+      bankAccountName: bankAccount.name,
+      sequenceNumber: nextSequenceNumber,
+      createdAt: new Date().toISOString()
+    })
+
+    return docRef.id
+  } catch (error) {
+    console.error('Error adding transaction with bank account:', error)
+    throw new Error(`Failed to add transaction: ${error}`)
+  }
+}
+
+/**
+ * 初始化默认银行账户
+ */
+export async function initializeDefaultBankAccounts(createdByUid: string): Promise<string[]> {
+  try {
+    const { DEFAULT_BANK_ACCOUNTS } = await import('./data')
+    
+    const accountIds: string[] = []
+    
+    for (const defaultAccount of DEFAULT_BANK_ACCOUNTS) {
+      // 检查是否已存在同名账户
+      const exists = await checkBankAccountNameExists(defaultAccount.name)
+      if (!exists) {
+                 const accountId = await addBankAccount({
+           ...defaultAccount,
+           createdByUid,
+           createdAt: new Date().toISOString(),
+           updatedAt: new Date().toISOString()
+         })
+        accountIds.push(accountId)
+      }
+    }
+    
+    return accountIds
+  } catch (error) {
+    console.error('Error initializing default bank accounts:', error)
+    throw new Error(`Failed to initialize default bank accounts: ${error}`)
+  }
+}
+
+/**
+ * 为现有交易分配默认银行账户
+ */
+export async function assignDefaultBankAccountToExistingTransactions(
+  defaultBankAccountId: string,
+  defaultBankAccountName: string
+): Promise<number> {
+  try {
+    // 获取所有没有银行账户的交易
+    const q = query(
+      collection(db, "transactions"),
+      where("bankAccountId", "==", null)
+    )
+    const querySnapshot = await getDocs(q)
+    
+    if (querySnapshot.empty) {
+      return 0
+    }
+    
+    const batch = writeBatch(db)
+    let updatedCount = 0
+    
+    querySnapshot.docs.forEach((docSnapshot) => {
+      const transactionRef = doc(db, "transactions", docSnapshot.id)
+      batch.update(transactionRef, {
+        bankAccountId: defaultBankAccountId,
+        bankAccountName: defaultBankAccountName
+      })
+      updatedCount++
+    })
+    
+    await batch.commit()
+    return updatedCount
+  } catch (error) {
+    console.error('Error assigning default bank account to transactions:', error)
+    throw new Error(`Failed to assign default bank account: ${error}`)
+  }
+}
+
+/**
+ * 获取银行账户统计信息
+ */
+export async function getBankAccountStats(): Promise<{
+  totalBankAccounts: number
+  activeBankAccounts: number
+  inactiveBankAccounts: number
+  totalTransactions: number
+  totalBalance: number
+}> {
+  try {
+    const bankAccounts = await getBankAccounts()
+    const allTransactions = await getTransactions()
+    
+    const activeBankAccounts = bankAccounts.filter(account => account.isActive).length
+    const totalTransactions = allTransactions.length
+    const totalBalance = bankAccounts.reduce((sum, account) => sum + account.balance, 0)
+    
+    return {
+      totalBankAccounts: bankAccounts.length,
+      activeBankAccounts,
+      inactiveBankAccounts: bankAccounts.length - activeBankAccounts,
+      totalTransactions,
+      totalBalance
+    }
+  } catch (error) {
+    console.error('Error getting bank account stats:', error)
+    throw new Error(`Failed to get bank account stats: ${error}`)
   }
 }

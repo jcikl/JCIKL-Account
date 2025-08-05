@@ -26,14 +26,14 @@ import {
   deleteDocument,
   getUsers,
   updateDocument,
-  type Account,
-  type UserProfile,
 } from "@/lib/firebase-utils"
+import type { Account, UserProfile } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { UserRoles, RoleLevels } from "@/lib/data"
 import { auth } from "@/lib/firebase"
 import { createUserWithEmailAndPassword } from "firebase/auth"
 import { CategoryManagement } from "./category-management"
+import { LinksManager } from "./links-manager";
 
 export function AccountSettings() {
   const { currentUser, hasPermission } = useAuth()
@@ -52,7 +52,7 @@ export function AccountSettings() {
   const [inviteEmail, setInviteEmail] = React.useState("")
   const [invitePassword, setInvitePassword] = React.useState("")
   const [inviteDisplayName, setInviteDisplayName] = React.useState("")
-  const [inviteRole, setInviteRole] = React.useState<UserProfile["role"]>(UserRoles.ASSISTANT_VICE_PRESIDENT)
+  const [inviteRole, setInviteRole] = React.useState<UserProfile["role"]>(UserRoles.ASSISTANT_VICE_PRESIDENT as UserProfile["role"])
 
   const fetchSettingsData = React.useCallback(async () => {
     setLoading(true)
@@ -135,7 +135,7 @@ export function AccountSettings() {
       setInviteEmail("")
       setInvitePassword("")
       setInviteDisplayName("")
-      setInviteRole(UserRoles.ASSISTANT_VICE_PRESIDENT)
+      setInviteRole(UserRoles.ASSISTANT_VICE_PRESIDENT as UserProfile["role"])
       setIsInviteUserOpen(false)
     } catch (err: any) {
       setError("邀请用户失败: " + err.message)
@@ -176,7 +176,7 @@ export function AccountSettings() {
         uid: user.uid,
         email: email,
         displayName: displayName,
-        role: role,
+        role: role as UserProfile["role"],
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
       }
@@ -238,6 +238,7 @@ export function AccountSettings() {
         <TabsList>
           <TabsTrigger value="accounts">账户图表</TabsTrigger>
           <TabsTrigger value="categories">收支分类</TabsTrigger>
+          <TabsTrigger value="links">链接管理</TabsTrigger>
           {hasPermission(RoleLevels[UserRoles.TREASURER]) && ( // Level 1 can access company settings
             <TabsTrigger value="company">公司设置</TabsTrigger>
           )}
@@ -398,7 +399,11 @@ export function AccountSettings() {
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-4">
-          <CategoryManagement />
+        <CategoryManagement />
+        </TabsContent>
+
+        <TabsContent value="links" className="space-y-4">
+        <LinksManager />
         </TabsContent>
 
         {hasPermission(RoleLevels[UserRoles.TREASURER]) && ( // Level 1 can access company settings
@@ -670,10 +675,10 @@ export function AccountSettings() {
                           <Badge variant="default">活跃</Badge>
                         </TableCell>
                         <TableCell>
-                          {typeof user.lastLogin === 'string' 
+                          {typeof user.lastLogin === 'string'
                             ? new Date(user.lastLogin).toLocaleString()
-                            : user.lastLogin?.seconds 
-                              ? new Date(user.lastLogin.seconds * 1000).toLocaleString()
+                            : (user.lastLogin && typeof user.lastLogin === 'object' && 'seconds' in user.lastLogin && typeof (user.lastLogin as any).seconds === 'number')
+                              ? new Date((user.lastLogin as any).seconds * 1000).toLocaleString()
                               : 'N/A'
                           }
                         </TableCell>
