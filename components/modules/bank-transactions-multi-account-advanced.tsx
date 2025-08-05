@@ -135,26 +135,26 @@ export function BankTransactionsMultiAccountAdvanced() {
   const initialBalance = currentAccount?.balance ?? 0
 
   // 计算单笔交易的净额
-  const calculateNetAmount = (transaction: Transaction): number => {
+  const calculateNetAmount = React.useCallback((transaction: Transaction): number => {
     return (transaction.income || 0) - (transaction.expense || 0)
-  }
+  }, [])
 
   // 计算累计余额
-  const calculateRunningBalance = (transactions: Transaction[], initialBalance: number = 0): number => {
+  const calculateRunningBalance = React.useCallback((transactions: Transaction[], initialBalance: number = 0): number => {
     return transactions.reduce((balance, transaction) => {
       return balance + calculateNetAmount(transaction)
     }, initialBalance)
-  }
+  }, [calculateNetAmount])
 
   // 计算每笔交易后的累计余额
-  const calculateRunningBalances = (transactions: Transaction[], initialBalance: number = 0): { transaction: Transaction, runningBalance: number }[] => {
+  const calculateRunningBalances = React.useCallback((transactions: Transaction[], initialBalance: number = 0): { transaction: Transaction, runningBalance: number }[] => {
     let currentBalance = initialBalance
     return transactions.map(transaction => {
       const netAmount = calculateNetAmount(transaction)
       currentBalance += netAmount
       return { transaction, runningBalance: currentBalance }
     })
-  }
+  }, [calculateNetAmount])
 
   // 按日期排序所有交易（从最旧到最新）
   const sortedAllTransactions = [...transactions].sort((a, b) => {
@@ -174,7 +174,7 @@ export function BankTransactionsMultiAccountAdvanced() {
   // 缓存累计余额计算结果（性能优化）
   const runningBalancesCache = React.useMemo(() => {
     return calculateRunningBalances(sortedAllTransactions, initialBalance)
-  }, [sortedAllTransactions, initialBalance])
+  }, [sortedAllTransactions, initialBalance, calculateRunningBalances])
 
   // 获取交易的累计余额（从缓存中）
   const getRunningBalance = React.useCallback((transactionId: string): number => {
@@ -200,6 +200,36 @@ export function BankTransactionsMultiAccountAdvanced() {
     project: "all",
     category: "all"
   })
+
+  // 为筛选后的交易计算累计余额
+  const getFilteredRunningBalance = React.useCallback((transactionId: string): number => {
+    // 累计余额应该是：初始余额 + 到该交易为止的所有交易的累计净额
+    // 无论是否有筛选条件，都应该基于所有交易计算累计余额
+    
+    // 首先找到目标交易
+    const targetTransaction = transactions.find(t => t.id === transactionId)
+    if (!targetTransaction) {
+      return 0
+    }
+
+    // 获取目标交易的日期
+    const targetDate = typeof targetTransaction.date === 'string' 
+      ? new Date(targetTransaction.date).getTime() 
+      : new Date(targetTransaction.date.seconds * 1000).getTime()
+
+    // 计算到目标交易日期为止的所有交易的累计净额
+    const transactionsUpToTarget = sortedAllTransactions.filter(transaction => {
+      const transactionDate = typeof transaction.date === 'string' 
+        ? new Date(transaction.date).getTime() 
+        : new Date(transaction.date.seconds * 1000).getTime()
+      return transactionDate <= targetDate
+    })
+
+    // 计算累计余额：初始余额 + 到该交易为止的累计净额
+    const runningBalance = calculateRunningBalance(transactionsUpToTarget, initialBalance)
+    
+    return runningBalance
+  }, [transactions, sortedAllTransactions, initialBalance, calculateRunningBalance])
 
   // 排序状态
   const [sortConfig, setSortConfig] = React.useState<SortConfig>({
@@ -233,7 +263,7 @@ export function BankTransactionsMultiAccountAdvanced() {
     projectid: "",
     projectName: "",
     category: "",
-    bankAccountId: selectedBankAccountId
+    bankAccountId: ""
   })
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -373,20 +403,20 @@ export function BankTransactionsMultiAccountAdvanced() {
       })
     }
 
-    // 金额范围筛选
+    // 金额范围筛选 - 修正：使用单笔交易的净额而不是累计余额
     if (advancedFilters.amountRange.min) {
       const minAmount = parseFloat(advancedFilters.amountRange.min)
       filtered = filtered.filter(transaction => {
-        const cumulativeBalance = getRunningBalance(transaction.id!)
-        return cumulativeBalance >= minAmount
+        const netAmount = calculateNetAmount(transaction)
+        return netAmount >= minAmount
       })
     }
 
     if (advancedFilters.amountRange.max) {
       const maxAmount = parseFloat(advancedFilters.amountRange.max)
       filtered = filtered.filter(transaction => {
-        const cumulativeBalance = getRunningBalance(transaction.id!)
-        return cumulativeBalance <= maxAmount
+        const netAmount = calculateNetAmount(transaction)
+        return netAmount <= maxAmount
       })
     }
 
@@ -425,7 +455,7 @@ export function BankTransactionsMultiAccountAdvanced() {
 
     setFilteredTransactions(filtered)
     setPagination(prev => ({ ...prev, totalItems: filtered.length, currentPage: 1 }))
-  }, [transactions, searchTerm, advancedFilters, sortConfig])
+  }, [transactions, searchTerm, advancedFilters, sortConfig, calculateNetAmount])
 
   // 获取当前页的交易
   const getCurrentPageTransactions = () => {
@@ -683,7 +713,7 @@ export function BankTransactionsMultiAccountAdvanced() {
       projectid: "",
       projectName: "",
       category: "",
-      bankAccountId: selectedBankAccountId
+      bankAccountId: selectedBankAccountId || ""
     })
     setIsEditMode(false)
     setEditingTransaction(null)
@@ -813,7 +843,7 @@ export function BankTransactionsMultiAccountAdvanced() {
   const handleExport = () => {
     const currentTransactions = getCurrentPageTransactions()
     const csvContent = generateCSV(currentTransactions)
-    downloadCSV(csvContent, `transactions_${selectedBankAccountId}_${new Date().toISOString().split('T')[0]}.csv`)
+    downloadCSV(csvContent, `transactions_${selectedBankAccountId || "unknown"}_${new Date().toISOString().split('T')[0]}.csv`)
     
     toast({
       title: "导出成功",
@@ -823,19 +853,35 @@ export function BankTransactionsMultiAccountAdvanced() {
 
   // 生成CSV内容
   const generateCSV = (transactions: Transaction[]) => {
-          const headers = ['日期', '描述', '描述2', '支出', '收入', '累计余额', '状态', '付款人', '项目', '分类']
-    const rows = transactions.map(t => [
-      formatDate(t.date),
-      t.description,
-      t.description2 || '',
-      t.expense || 0,
-      t.income || 0,
-              getRunningBalance(t.id!),
-      t.status,
-      t.payer || '',
-      t.projectName || '',
-      t.category || ''
-    ])
+    const headers = ['日期', '描述', '描述2', '支出', '收入', '累计余额', '状态', '付款人', '项目', '分类']
+    
+    // 为当前页交易计算累计余额
+    const sortedTransactions = [...transactions].sort((a, b) => {
+      const dateA = typeof a.date === 'string' ? new Date(a.date).getTime() : new Date(a.date.seconds * 1000).getTime()
+      const dateB = typeof b.date === 'string' ? new Date(b.date).getTime() : new Date(b.date.seconds * 1000).getTime()
+      return dateA - dateB // 从最旧到最新排序
+    })
+    
+    // 计算当前页交易的累计余额
+    const pageRunningBalances = calculateRunningBalances(sortedTransactions, initialBalance)
+    
+    const rows = transactions.map(t => {
+      // 找到当前交易在排序后列表中的累计余额
+      const runningBalance = pageRunningBalances.find(item => item.transaction.id === t.id)?.runningBalance || 0
+      
+      return [
+        formatDate(t.date),
+        t.description,
+        t.description2 || '',
+        t.expense || 0,
+        t.income || 0,
+        runningBalance,
+        t.status,
+        t.payer || '',
+        t.projectName || '',
+        t.category || ''
+      ]
+    })
     
     return [headers, ...rows].map(row => 
       row.map(cell => `"${cell}"`).join(',')
@@ -1017,6 +1063,176 @@ export function BankTransactionsMultiAccountAdvanced() {
             </CardContent>
           </Card>
         </div>
+
+      {/* 项目统计部分 */}
+      {projects.length > 0 && (
+        <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-purple-900">
+                  <BarChart3 className="h-5 w-5" />
+                  项目统计分析
+                </CardTitle>
+                <CardDescription className="text-purple-700">
+                  按项目统计的交易情况和财务表现
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200">
+                <PieChart className="h-3 w-3 mr-1" />
+                {projects.length} 个项目
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            {/* 项目统计卡片 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {(() => {
+                const projectStats = projects.map(project => {
+                  const projectTransactions = transactions.filter(t => 
+                    t.projectid === project.projectid || t.projectName === project.name
+                  )
+                  const totalIncome = projectTransactions.reduce((sum, t) => sum + (t.income || 0), 0)
+                  const totalExpense = projectTransactions.reduce((sum, t) => sum + (t.expense || 0), 0)
+                  const netAmount = totalIncome - totalExpense
+                  const transactionCount = projectTransactions.length
+                  
+                  return {
+                    ...project,
+                    totalIncome,
+                    totalExpense,
+                    netAmount,
+                    transactionCount
+                  }
+                }).sort((a, b) => b.netAmount - a.netAmount).slice(0, 3)
+
+                return projectStats.map((project, index) => (
+                  <Card key={project.id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium text-gray-900 truncate">
+                          {project.name}
+                        </CardTitle>
+                        <Badge variant={project.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                          {project.status === 'Active' ? '进行中' : project.status === 'Completed' ? '已完成' : '暂停'}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">总收入</span>
+                        <span className="text-sm font-semibold text-green-600">
+                          ¥{project.totalIncome.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">总支出</span>
+                        <span className="text-sm font-semibold text-red-600">
+                          ¥{project.totalExpense.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">净额</span>
+                        <span className={`text-sm font-semibold ${project.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-gray-500">交易数</span>
+                        <span className="text-sm font-semibold text-blue-600">
+                          {project.transactionCount} 笔
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              })()}
+            </div>
+
+            {/* 项目统计表格 */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">项目详细统计</h3>
+                <Badge variant="outline" className="bg-gray-100">
+                  共 {projects.length} 个项目
+                </Badge>
+              </div>
+              
+              <div className="rounded-md border border-gray-200 overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-gray-50">
+                    <TableRow>
+                      <TableHead className="font-semibold text-gray-900">项目名称</TableHead>
+                      <TableHead className="font-semibold text-gray-900">状态</TableHead>
+                      <TableHead className="font-semibold text-gray-900 text-right">总收入</TableHead>
+                      <TableHead className="font-semibold text-gray-900 text-right">总支出</TableHead>
+                      <TableHead className="font-semibold text-gray-900 text-right">净额</TableHead>
+                      <TableHead className="font-semibold text-gray-900 text-right">交易数</TableHead>
+                      <TableHead className="font-semibold text-gray-900 text-right">平均金额</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      const projectStats = projects.map(project => {
+                        const projectTransactions = transactions.filter(t => 
+                          t.projectid === project.projectid || t.projectName === project.name
+                        )
+                        const totalIncome = projectTransactions.reduce((sum, t) => sum + (t.income || 0), 0)
+                        const totalExpense = projectTransactions.reduce((sum, t) => sum + (t.expense || 0), 0)
+                        const netAmount = totalIncome - totalExpense
+                        const transactionCount = projectTransactions.length
+                        const avgAmount = transactionCount > 0 ? (totalIncome + totalExpense) / transactionCount : 0
+                        
+                        return {
+                          ...project,
+                          totalIncome,
+                          totalExpense,
+                          netAmount,
+                          transactionCount,
+                          avgAmount
+                        }
+                      }).sort((a, b) => b.netAmount - a.netAmount)
+
+                      return projectStats.map((project) => (
+                        <TableRow key={project.id} className="hover:bg-gray-50">
+                          <TableCell className="font-medium text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                              {project.name}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={project.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                              {project.status === 'Active' ? '进行中' : project.status === 'Completed' ? '已完成' : '暂停'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-green-600">
+                            ¥{project.totalIncome.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">
+                            ¥{project.totalExpense.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            <span className={project.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                              {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-blue-600">
+                            {project.transactionCount} 笔
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-gray-600">
+                            ¥{project.avgAmount.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    })()}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
        {/* 高级筛选面板 */}
        <Card>
@@ -1346,8 +1562,8 @@ export function BankTransactionsMultiAccountAdvanced() {
                       {transaction.income ? `¥${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      <span className={getRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
-                        ¥{getRunningBalance(transaction.id!).toFixed(2)}
+                      <span className={getFilteredRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
+                        ¥{getFilteredRunningBalance(transaction.id!).toFixed(2)}
                       </span>
                     </TableCell>
                     <TableCell>
