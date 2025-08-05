@@ -36,18 +36,18 @@ interface ProjectTransactionStats {
   expenseByCategory: Record<string, number>
 }
 
-// 优化的日期格式化函数
-const formatProjectDate = React.useCallback((date: string | { seconds: number; nanoseconds: number }): string => {
+// 日期格式化函数
+const formatProjectDate = (date: string | { seconds: number; nanoseconds: number }): string => {
   if (typeof date === 'string') {
     return new Date(date).toLocaleDateString()
   } else if (date?.seconds) {
     return new Date(date.seconds * 1000).toLocaleDateString()
   }
   return 'N/A'
-}, [])
+}
 
-// 优化的交易日期格式化函数
-const formatTransactionDate = React.useCallback((date: string | { seconds: number; nanoseconds: number }): string => {
+// 交易日期格式化函数
+const formatTransactionDate = (date: string | { seconds: number; nanoseconds: number }): string => {
   if (typeof date === 'string') {
     return new Date(date).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -62,18 +62,18 @@ const formatTransactionDate = React.useCallback((date: string | { seconds: numbe
     })
   }
   return 'N/A'
-}, [])
+}
 
-// 优化的净金额计算函数
-const calculateNetAmount = React.useCallback((transaction: Transaction): number => {
+// 净金额计算函数
+const calculateNetAmount = (transaction: Transaction): number => {
   return transaction.income - transaction.expense
-}, [])
+}
 
-// 优化的净金额格式化函数
-const formatNetAmount = React.useCallback((transaction: Transaction): string => {
+// 净金额格式化函数
+const formatNetAmount = (transaction: Transaction): string => {
   const netAmount = calculateNetAmount(transaction)
   return netAmount >= 0 ? `+$${netAmount.toFixed(2)}` : `-$${Math.abs(netAmount).toFixed(2)}`
-}, [calculateNetAmount])
+}
 
 // 优化的统计卡片组件
 const StatCard = React.memo(({ 

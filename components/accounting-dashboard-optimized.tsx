@@ -11,6 +11,8 @@ import {
   Scale,
   Settings,
   TrendingUp,
+  Box,
+  DollarSign,
 } from "lucide-react"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -20,16 +22,19 @@ import { UserRoles, RoleLevels } from "@/lib/data"
 
 // 核心模块 - 预加载（用户最常用的模块）
 import { DashboardOverviewOptimized } from "@/components/modules/dashboard-overview-optimized"
-import { BankTransactions } from "@/components/modules/bank-transactions"
+import { BankTransactionsMultiAccountAdvanced } from "@/components/modules/bank-transactions-multi-account-advanced"
 import { ProjectAccountsOptimized } from "@/components/modules/project-accounts-optimized"
 
 // 次要模块 - 懒加载（不常用的模块）
-const JournalEntries = React.lazy(() => import("@/components/modules/journal-entries").then(module => ({ default: module.JournalEntries })))
-const TrialBalance = React.lazy(() => import("@/components/modules/trial-balance").then(module => ({ default: module.TrialBalance })))
-const ProfitLoss = React.lazy(() => import("@/components/modules/profit-loss").then(module => ({ default: module.ProfitLoss })))
-const BalanceSheet = React.lazy(() => import("@/components/modules/balance-sheet").then(module => ({ default: module.BalanceSheet })))
-const GeneralLedger = React.lazy(() => import("@/components/modules/general-ledger").then(module => ({ default: module.GeneralLedger })))
+const JournalEntries = React.lazy(() => import("@/components/modules/journal-entries-optimized").then(module => ({ default: module.JournalEntriesOptimized })))
+const TrialBalance = React.lazy(() => import("@/components/modules/trial-balance-optimized").then(module => ({ default: module.TrialBalanceOptimized })))
+const ProfitLoss = React.lazy(() => import("@/components/modules/profit-loss-optimized").then(module => ({ default: module.ProfitLossOptimized })))
+const BalanceSheet = React.lazy(() => import("@/components/modules/balance-sheet-optimized").then(module => ({ default: module.BalanceSheetOptimized })))
+const GeneralLedger = React.lazy(() => import("@/components/modules/general-ledger-optimized").then(module => ({ default: module.GeneralLedgerOptimized })))
 const AccountSettingsOptimized = React.lazy(() => import("@/components/modules/account-settings-optimized").then(module => ({ default: module.AccountSettings })))
+const MerchandiseManagement = React.lazy(() => import("@/components/modules/merchandise-management").then(module => ({ default: module.MerchandiseManagement })))
+const MembershipFeeManagement = React.lazy(() => import("@/components/modules/membership-fee-management").then(module => ({ default: module.MembershipFeeManagement })))
+const OperationExpenseManagement = React.lazy(() => import("@/components/modules/operation-expense-management").then(module => ({ default: module.OperationExpenseManagement })))
 
 // 骨架屏组件
 const SkeletonLoader = () => (
@@ -134,6 +139,29 @@ const navigationData = {
       isCore: false,
     },
   ],
+  management: [
+    {
+      title: "Merchandise Management",
+      url: "#",
+      icon: Box,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+    {
+      title: "Membership Fee Management",
+      url: "#",
+      icon: DollarSign,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+    {
+      title: "Operation Expense Management",
+      url: "#",
+      icon: FileText,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+  ],
 }
 
 // 优化的模块渲染组件
@@ -177,7 +205,7 @@ const OptimizedModuleRenderer = React.memo(({
       case "Dashboard":
         return <DashboardOverviewOptimized />
       case "Bank Transactions":
-        return <BankTransactions />
+        return <BankTransactionsMultiAccountAdvanced />
       case "Project Accounts":
         return <ProjectAccountsOptimized />
       default:
@@ -206,6 +234,15 @@ const OptimizedModuleRenderer = React.memo(({
       break
     case "Account Settings":
       LazyComponent = AccountSettingsOptimized
+      break
+    case "Merchandise Management":
+      LazyComponent = MerchandiseManagement
+      break
+    case "Membership Fee Management":
+      LazyComponent = MembershipFeeManagement
+      break
+    case "Operation Expense Management":
+      LazyComponent = OperationExpenseManagement
       break
     default:
       return <div className="p-6 text-center text-muted-foreground">模块未找到。</div>
@@ -276,7 +313,8 @@ export function AccountingDashboardOptimized() {
       ...navigationData.transactions,
       ...navigationData.accounts,
       ...navigationData.reports,
-      ...navigationData.settings
+      ...navigationData.settings,
+      ...(navigationData.management || [])
     ]
     
     const currentNavItem = allNavItems.find(item => item.title === currentPage)

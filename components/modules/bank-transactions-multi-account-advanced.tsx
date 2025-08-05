@@ -56,7 +56,8 @@ import {
   getTransactionsByBankAccount,
   addTransactionWithBankAccount,
   deleteDocument, 
-  updateDocument, 
+  updateDocument,
+  updateTransaction, 
   getAccounts, 
   getProjects, 
   getCategories
@@ -66,7 +67,7 @@ import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
 import { BankTransactionsCharts } from "./bank-transactions-charts"
-import { BankTransactionsMultiAccountImportDialog } from "./bank-transactions-multi-account-import-dialog"
+import { PasteImportDialog } from "./paste-import-dialog"
 
 interface TransactionFormData {
   date: string
@@ -133,10 +134,61 @@ export function BankTransactionsMultiAccountAdvanced() {
   const currentAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId)
   const initialBalance = currentAccount?.balance ?? 0
 
+  // 计算单笔交易的净额
+  const calculateNetAmount = (transaction: Transaction): number => {
+    return (transaction.income || 0) - (transaction.expense || 0)
+  }
+
+  // 计算累计余额
+  const calculateRunningBalance = (transactions: Transaction[], initialBalance: number = 0): number => {
+    return transactions.reduce((balance, transaction) => {
+      return balance + calculateNetAmount(transaction)
+    }, initialBalance)
+  }
+
+  // 计算每笔交易后的累计余额
+  const calculateRunningBalances = (transactions: Transaction[], initialBalance: number = 0): { transaction: Transaction, runningBalance: number }[] => {
+    let currentBalance = initialBalance
+    return transactions.map(transaction => {
+      const netAmount = calculateNetAmount(transaction)
+      currentBalance += netAmount
+      return { transaction, runningBalance: currentBalance }
+    })
+  }
+
+  // 按日期排序所有交易（从最旧到最新）
+  const sortedAllTransactions = [...transactions].sort((a, b) => {
+    const dateA = typeof a.date === 'string' ? new Date(a.date).getTime() : new Date(a.date.seconds * 1000).getTime()
+    const dateB = typeof b.date === 'string' ? new Date(b.date).getTime() : new Date(b.date.seconds * 1000).getTime()
+    return dateA - dateB // 从最旧到最新排序
+  })
+
+  // 计算所有交易的总收入和总支出
   const totalIncome = transactions.reduce((sum, t) => sum + (parseFloat(t.income?.toString() || "0")), 0)
   const totalExpense = transactions.reduce((sum, t) => sum + (parseFloat(t.expense?.toString() || "0")), 0)
-  const netAmount = totalIncome - totalExpense
-  const endingBalance = initialBalance + netAmount
+  const cumulativeBalance = totalIncome - totalExpense
+  
+  // 计算所有交易按时间顺序的累计余额
+  const totalRunningBalance = calculateRunningBalance(sortedAllTransactions, initialBalance)
+  
+  // 缓存累计余额计算结果（性能优化）
+  const runningBalancesCache = React.useMemo(() => {
+    return calculateRunningBalances(sortedAllTransactions, initialBalance)
+  }, [sortedAllTransactions, initialBalance])
+
+  // 获取交易的累计余额（从缓存中）
+  const getRunningBalance = React.useCallback((transactionId: string): number => {
+    const cached = runningBalancesCache.find(item => item.transaction.id === transactionId)
+    return cached ? cached.runningBalance : 0
+  }, [runningBalancesCache])
+  
+  // 验证计算一致性
+  const expectedRunningBalance = initialBalance + cumulativeBalance
+  if (Math.abs(totalRunningBalance - expectedRunningBalance) > 0.01) {
+    console.warn('累计余额计算不一致:', { totalRunningBalance, expectedRunningBalance })
+  }
+
+  const endingBalance = totalRunningBalance
   // ====== 以上为初始余额和期末余额计算逻辑 ======
 
   // 搜索和筛选状态
@@ -195,6 +247,9 @@ export function BankTransactionsMultiAccountAdvanced() {
 
   // 数据可视化状态
   const [showCharts, setShowCharts] = React.useState(false)
+
+  // 高级筛选显示状态
+  const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false)
 
   // 加载交易数据
   const fetchTransactions = React.useCallback(async () => {
@@ -322,16 +377,16 @@ export function BankTransactionsMultiAccountAdvanced() {
     if (advancedFilters.amountRange.min) {
       const minAmount = parseFloat(advancedFilters.amountRange.min)
       filtered = filtered.filter(transaction => {
-        const netAmount = (transaction.income || 0) - (transaction.expense || 0)
-        return netAmount >= minAmount
+        const cumulativeBalance = getRunningBalance(transaction.id!)
+        return cumulativeBalance >= minAmount
       })
     }
 
     if (advancedFilters.amountRange.max) {
       const maxAmount = parseFloat(advancedFilters.amountRange.max)
       filtered = filtered.filter(transaction => {
-        const netAmount = (transaction.income || 0) - (transaction.expense || 0)
-        return netAmount <= maxAmount
+        const cumulativeBalance = getRunningBalance(transaction.id!)
+        return cumulativeBalance <= maxAmount
       })
     }
 
@@ -454,6 +509,230 @@ export function BankTransactionsMultiAccountAdvanced() {
     }
   }
 
+  // 处理编辑交易
+  const handleEditTransaction = (transaction: Transaction) => {
+    console.log('=== 开始编辑交易记录 ===')
+    console.log('要编辑的交易记录:', transaction)
+    
+    setEditingTransaction(transaction)
+    setIsEditMode(true)
+    
+    // 确定项目ID和项目名称
+    let projectId = transaction.projectid || ""
+    let projectName = transaction.projectName || ""
+    
+    // 检查是否是账户户口
+    const account = accounts.find(a => a.code === transaction.projectid)
+    if (account) {
+      projectId = account.code
+      projectName = account.name
+    }
+    
+    setFormData({
+      date: typeof transaction.date === "string" 
+        ? transaction.date 
+        : new Date(transaction.date.seconds * 1000).toISOString().split('T')[0],
+      description: transaction.description || "",
+      description2: transaction.description2 || "",
+      expense: transaction.expense?.toString() || "",
+      income: transaction.income?.toString() || "",
+      status: transaction.status || "Completed",
+      payer: transaction.payer || "",
+      projectid: projectId,
+      projectName: projectName,
+      category: transaction.category || "",
+      bankAccountId: transaction.bankAccountId || selectedBankAccountId
+    })
+    setIsFormOpen(true)
+  }
+
+  // 处理删除交易
+  const handleDeleteTransaction = async (transaction: Transaction) => {
+    setDeletingTransaction(transaction)
+    setIsDeleteDialogOpen(true)
+  }
+
+  // 确认删除
+  const confirmDelete = async () => {
+    if (!deletingTransaction) return
+
+    try {
+      await deleteDocument('transactions', deletingTransaction.id!)
+      toast({
+        title: "删除成功",
+        description: "交易已成功删除",
+      })
+      
+      // 重新加载交易数据
+      await fetchTransactions()
+    } catch (error) {
+      console.error("Error deleting transaction:", error)
+      toast({
+        title: "删除失败",
+        description: "无法删除交易",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleteDialogOpen(false)
+      setDeletingTransaction(null)
+    }
+  }
+
+  // 处理表单提交
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!currentUser || !selectedBankAccountId) return
+
+    // 表单验证
+    if (!formData.date || !formData.description) {
+      toast({
+        title: "验证失败",
+        description: "请填写必填字段",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!formData.expense && !formData.income) {
+      toast({
+        title: "验证失败",
+        description: "请填写支出或收入金额",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      // 确定项目名称
+      let finalProjectName = formData.projectName
+      if (formData.projectid) {
+        // 检查是否是账户户口
+        const selectedAccount = accounts.find(a => a.code === formData.projectid)
+        if (selectedAccount) {
+          finalProjectName = selectedAccount.name
+        } else {
+          // 检查是否是项目户口
+          const selectedProject = projects.find(p => p.projectid === formData.projectid)
+          finalProjectName = selectedProject?.name || formData.projectName
+        }
+      }
+
+      const transactionData = {
+        date: formData.date,
+        description: formData.description,
+        description2: formData.description2,
+        expense: formData.expense ? parseFloat(formData.expense) : 0,
+        income: formData.income ? parseFloat(formData.income) : 0,
+        status: formData.status,
+        payer: formData.payer,
+        projectid: formData.projectid,
+        projectName: finalProjectName,
+        category: formData.category,
+        bankAccountId: selectedBankAccountId,
+        bankAccountName: bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name,
+        createdByUid: currentUser.uid
+      }
+
+      if (isEditMode && editingTransaction) {
+        // 更新交易
+        await updateDocument('transactions', editingTransaction.id!, transactionData)
+        toast({
+          title: "更新成功",
+          description: "交易已成功更新",
+        })
+      } else {
+        // 添加新交易
+        await addTransactionWithBankAccount(transactionData, selectedBankAccountId)
+        toast({
+          title: "添加成功",
+          description: "交易已成功添加",
+        })
+      }
+
+      // 重新加载交易数据
+      await fetchTransactions()
+      
+      // 关闭表单
+      setIsFormOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error("Error saving transaction:", error)
+      toast({
+        title: "保存失败",
+        description: "无法保存交易",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // 重置表单
+  const resetForm = () => {
+    setFormData({
+      date: "",
+      description: "",
+      description2: "",
+      expense: "",
+      income: "",
+      status: "Completed",
+      payer: "",
+      projectid: "",
+      projectName: "",
+      category: "",
+      bankAccountId: selectedBankAccountId
+    })
+    setIsEditMode(false)
+    setEditingTransaction(null)
+  }
+
+  // 获取可用的项目年份
+  const getAvailableProjectYears = () => {
+    const years = new Set<number>()
+    projects.forEach(project => {
+      if (project.projectid) {
+        const parts = project.projectid.split('_')
+        if (parts.length >= 3) {
+          const year = parseInt(parts[0])
+          if (!isNaN(year)) {
+            years.add(year)
+          }
+        }
+      }
+    })
+    return Array.from(years).sort((a, b) => b - a) // 降序排列
+  }
+
+  // 根据项目年份筛选项目
+  const getFilteredProjectsByYear = (year: string) => {
+    if (!year || year === "all") {
+      return projects
+    }
+    return projects.filter(project => {
+      if (project.projectid) {
+        const parts = project.projectid.split('_')
+        return parts.length >= 3 && parts[0] === year
+      }
+      return false
+    })
+  }
+
+  // 按BOD分类分组项目
+  const getGroupedProjects = (projectsToGroup: Project[]) => {
+    const grouped: Record<string, Project[]> = {}
+    projectsToGroup.forEach(project => {
+      const category = project.bodCategory || '其他'
+      if (!grouped[category]) {
+        grouped[category] = []
+      }
+      grouped[category].push(project)
+    })
+    return grouped
+  }
+
   // 处理导入
   const handleImport = async (parsedTransactions: Array<{
     date: string
@@ -466,11 +745,13 @@ export function BankTransactionsMultiAccountAdvanced() {
     projectid?: string
     projectName?: string
     category?: string
-    bankAccountId: string
+    bankAccountId?: string
+    bankAccountName?: string
     isValid: boolean
     errors: string[]
     isUpdate?: boolean
     originalId?: string
+    rowNumber?: number
   }>) => {
     if (!currentUser) return
 
@@ -481,28 +762,35 @@ export function BankTransactionsMultiAccountAdvanced() {
       for (const parsedTransaction of parsedTransactions) {
         if (!parsedTransaction.isValid) continue
 
+        // 使用传入的银行账户ID或当前选中的银行账户ID
+        const bankAccountId = parsedTransaction.bankAccountId || (selectedBankAccountId || "")
+        if (!bankAccountId) {
+          console.error("缺少银行账户ID")
+          continue
+        }
+
         const transactionData: Omit<Transaction, "id"> = {
           date: parsedTransaction.date,
           description: parsedTransaction.description,
-          description2: parsedTransaction.description2,
+          description2: parsedTransaction.description2 || "",
           expense: parsedTransaction.expense,
           income: parsedTransaction.income,
           status: parsedTransaction.status,
-          payer: parsedTransaction.payer,
-          projectid: parsedTransaction.projectid,
-          projectName: parsedTransaction.projectName,
-          category: parsedTransaction.category,
-          bankAccountId: parsedTransaction.bankAccountId,
+          payer: parsedTransaction.payer || "",
+          projectid: parsedTransaction.projectid || "",
+          projectName: parsedTransaction.projectName || "",
+          category: parsedTransaction.category || "",
+          bankAccountId: bankAccountId,
           createdByUid: currentUser.uid
         }
 
         if (parsedTransaction.isUpdate && parsedTransaction.originalId) {
           // 更新现有交易
-          await updateDocument("transactions", parsedTransaction.originalId, transactionData)
+          await updateTransaction(parsedTransaction.originalId, transactionData)
           updatedCount++
         } else {
           // 添加新交易
-          await addTransactionWithBankAccount(transactionData, parsedTransaction.bankAccountId)
+          await addTransactionWithBankAccount(transactionData, bankAccountId)
           addedCount++
         }
       }
@@ -535,14 +823,14 @@ export function BankTransactionsMultiAccountAdvanced() {
 
   // 生成CSV内容
   const generateCSV = (transactions: Transaction[]) => {
-    const headers = ['日期', '描述', '描述2', '支出', '收入', '净额', '状态', '付款人', '项目', '分类']
+          const headers = ['日期', '描述', '描述2', '支出', '收入', '累计余额', '状态', '付款人', '项目', '分类']
     const rows = transactions.map(t => [
       formatDate(t.date),
       t.description,
       t.description2 || '',
       t.expense || 0,
       t.income || 0,
-      (t.income || 0) - (t.expense || 0),
+              getRunningBalance(t.id!),
       t.status,
       t.payer || '',
       t.projectName || '',
@@ -575,6 +863,8 @@ export function BankTransactionsMultiAccountAdvanced() {
   // 计算总页数
   const totalPages = Math.ceil(pagination.totalItems / pagination.pageSize)
 
+
+
   return (
     <div className="space-y-6">
              <div className="flex items-center justify-between">
@@ -583,61 +873,77 @@ export function BankTransactionsMultiAccountAdvanced() {
            <p className="text-muted-foreground">
              支持分页、排序、批量操作、导入导出、高级筛选和数据可视化
            </p>
+        </div>
          </div>
 
-         {/* 银行账户选择 */}
+      {/* 银行账户标签页 */}
          {bankAccounts.length > 0 && (
-           <div className="flex items-center space-x-4">
-             <div>
-               <Label className="text-sm">选择银行账户</Label>
-               <Select 
-                 value={selectedBankAccountId} 
-                 onValueChange={(value) => {
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">银行账户</h2>
+          </div>
+          <Tabs value={selectedBankAccountId} onValueChange={(value) => {
                    setSelectedBankAccountId(value)
                    setSelectedTransactions(new Set())
                    setIsSelectAll(false)
-                 }}
-               >
-                 <SelectTrigger className="w-48">
-                   <SelectValue />
-                 </SelectTrigger>
-                 <SelectContent>
+          }}>
+            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                    {bankAccounts.map((account) => (
-                     <SelectItem key={account.id} value={account.id!}>
-                       {account.name}
-                     </SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
+                <TabsTrigger 
+                  key={account.id} 
+                  value={account.id!}
+                  className="flex items-center space-x-2"
+                  disabled={!account.isActive}
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span className="truncate">{account.name}</span>
+                  {!account.isActive && (
+                    <Badge variant="secondary" className="text-xs">已停用</Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
              </div>
+      )}
+
+      {/* 交易管理操作按钮 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">交易管理</h2>
            </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            导出
+          </Button>
+          
+          {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
+            <Button variant="outline" size="sm" onClick={() => setIsImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              导入
+            </Button>
          )}
         
         {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
-          <div className="flex items-center space-x-2">
             <Button
               onClick={() => {
                 setIsEditMode(false)
                 setEditingTransaction(null)
-                setFormData({
+                resetForm()
+                setFormData(prev => ({
+                  ...prev,
                   date: new Date().toISOString().split('T')[0],
-                  description: "",
-                  description2: "",
-                  expense: "",
-                  income: "",
-                  status: "Completed",
-                  payer: "",
-                  projectid: "",
-                  projectName: "",
-                  category: "",
                   bankAccountId: selectedBankAccountId
-                })
+                }))
                 setIsFormOpen(true)
               }}
             >
               <Plus className="h-4 w-4 mr-2" />
-              新增交易
+              添加交易
             </Button>
+          )}
+
             <Button
               variant="outline"
               onClick={() => setShowCharts(!showCharts)}
@@ -645,64 +951,101 @@ export function BankTransactionsMultiAccountAdvanced() {
               <BarChart3 className="h-4 w-4 mr-2" />
               {showCharts ? "隐藏图表" : "显示图表"}
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleExport}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              导出
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsImportOpen(true)}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              导入
-            </Button>
           </div>
-        )}
       </div>
 
-             {/* 加载状态 */}
-       {loading && (
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
          <Card>
-           <CardContent className="pt-6">
-             <div className="flex items-center justify-center p-8">
-               <div className="text-center">
-                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                 <p className="text-gray-600">加载交易数据中...</p>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">总交易数</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{transactions.length}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">总收入</CardTitle>
+              <DollarSign className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ¥{totalIncome.toFixed(2)}
                </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">总支出</CardTitle>
+              <DollarSign className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                ¥{totalExpense.toFixed(2)}
              </div>
            </CardContent>
          </Card>
-       )}
-
-       {/* 错误状态 */}
-       {error && (
-         <Card className="border-red-200 bg-red-50">
-           <CardContent className="pt-6">
-             <div className="flex items-center space-x-2">
-               <div className="text-red-600">错误: {error}</div>
-               <Button
-                 variant="ghost"
-                 size="sm"
-                 onClick={() => setError(null)}
-               >
-                 关闭
-               </Button>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">累计余额</CardTitle>
+              <DollarSign className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${cumulativeBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {cumulativeBalance >= 0 ? '+' : ''}¥{Math.abs(cumulativeBalance).toFixed(2)}
              </div>
            </CardContent>
          </Card>
-       )}
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">当前余额</CardTitle>
+              <CreditCard className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                ¥{endingBalance.toFixed(2)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                初始余额:¥{initialBalance.toFixed(2)} • 累计余额:¥{cumulativeBalance.toFixed(2)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
        {/* 高级筛选面板 */}
        <Card>
         <CardHeader>
+            <div className="flex items-center justify-between">
           <CardTitle className="flex items-center">
             <Filter className="h-4 w-4 mr-2" />
             高级筛选
           </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                {showAdvancedFilters ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-2" />
+                    收起筛选
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    展开筛选
+                  </>
+                )}
+              </Button>
+            </div>
         </CardHeader>
+          {showAdvancedFilters && (
         <CardContent>
           {/* 搜索功能 */}
           <div className="mb-4">
@@ -851,6 +1194,7 @@ export function BankTransactionsMultiAccountAdvanced() {
             </Button>
           </div>
         </CardContent>
+          )}
       </Card>
 
       {/* 批量操作工具栏 */}
@@ -961,7 +1305,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                   <TableHead>描述2</TableHead>
                   <TableHead className="text-right">支出</TableHead>
                   <TableHead className="text-right">收入</TableHead>
-                  <TableHead className="text-right">净额</TableHead>
+                  <TableHead className="text-right">累计余额</TableHead>
                   <TableHead 
                     className="cursor-pointer"
                     onClick={() => handleSort('status')}
@@ -1002,8 +1346,8 @@ export function BankTransactionsMultiAccountAdvanced() {
                       {transaction.income ? `¥${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      <span className={(transaction.income || 0) - (transaction.expense || 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                        {(transaction.income || 0) - (transaction.expense || 0) >= 0 ? '+' : ''}¥{((transaction.income || 0) - (transaction.expense || 0)).toFixed(2)}
+                      <span className={getRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
+                        ¥{getRunningBalance(transaction.id!).toFixed(2)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -1020,14 +1364,14 @@ export function BankTransactionsMultiAccountAdvanced() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {/* TODO: 编辑功能 */}}
+                            onClick={() => handleEditTransaction(transaction)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {/* TODO: 删除功能 */}}
+                            onClick={() => handleDeleteTransaction(transaction)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1093,15 +1437,283 @@ export function BankTransactionsMultiAccountAdvanced() {
         />
       )}
 
-      {/* 导入对话框 */}
-      <BankTransactionsMultiAccountImportDialog
+
+
+      {/* 编辑交易对话框 */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditMode ? "编辑交易" : "新增交易"}</DialogTitle>
+            <DialogDescription>
+              请填写交易详情。
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="date">日期</Label>
+              <Input
+                id="date"
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="description">描述</Label>
+              <Input
+                id="description"
+                type="text"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="description2">描述2</Label>
+              <Input
+                id="description2"
+                type="text"
+                value={formData.description2}
+                onChange={(e) => setFormData(prev => ({ ...prev, description2: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="expense">支出</Label>
+                <Input
+                  id="expense"
+                  type="number"
+                  value={formData.expense}
+                  onChange={(e) => setFormData(prev => ({ ...prev, expense: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="income">收入</Label>
+                <Input
+                  id="income"
+                  type="number"
+                  value={formData.income}
+                  onChange={(e) => setFormData(prev => ({ ...prev, income: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="status">状态</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value: "Completed" | "Pending" | "Draft") => setFormData(prev => ({ ...prev, status: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Completed">已完成</SelectItem>
+                  <SelectItem value="Pending">待处理</SelectItem>
+                  <SelectItem value="Draft">草稿</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="payer">付款人</Label>
+              <Input
+                id="payer"
+                type="text"
+                value={formData.payer}
+                onChange={(e) => setFormData(prev => ({ ...prev, payer: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="project-year">项目年份</Label>
+                <Select
+                  value={formData.projectid ? (() => {
+                    const parts = formData.projectid.split('_')
+                    return parts.length >= 3 ? parts[0] : ""
+                  })() : "no-year"}
+                  onValueChange={(value) => {
+                    // 当项目年份改变时，清空项目户口
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      projectid: "",
+                      projectName: ""
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目年份" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-year">无项目年份</SelectItem>
+                    {getAvailableProjectYears().map(year => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}年
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="projectid">项目户口</Label>
+                <Select
+                  value={formData.projectid}
+                  onValueChange={(value) => {
+                    // 检查是否是账户户口
+                    const selectedAccount = accounts.find(a => a.code === value)
+                    if (selectedAccount) {
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        projectid: value,
+                        projectName: selectedAccount.name
+                      }))
+                    } else {
+                      // 检查是否是项目户口
+                      const selectedProject = projects.find(p => p.projectid === value)
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        projectid: value,
+                        projectName: selectedProject?.name || ""
+                      }))
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择项目户口" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-project">无项目</SelectItem>
+                    
+                    {/* 账号户口分类 */}
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-blue-50 border-b">
+                      账号户口
+                    </div>
+                    {(() => {
+                      const accountGroups: Record<string, Account[]> = {}
+                      accounts.forEach(account => {
+                        const type = account.type
+                        if (!accountGroups[type]) {
+                          accountGroups[type] = []
+                        }
+                        accountGroups[type].push(account)
+                      })
+                      
+                      return Object.entries(accountGroups).map(([type, typeAccounts]) => (
+                        <div key={`account-${type}`}>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
+                            {type}
+                          </div>
+                          {typeAccounts.map((account) => (
+                            <SelectItem key={`account-${account.id}`} value={account.code} className="ml-4">
+                              {account.code} - {account.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))
+                    })()}
+                    
+                    {/* 项目户口分类 */}
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-green-50 border-b mt-2">
+                      项目户口
+                    </div>
+                    {(() => {
+                      const currentYear = formData.projectid ? (() => {
+                        const parts = formData.projectid.split('_')
+                        return parts.length >= 3 ? parts[0] : ""
+                      })() : ""
+                      
+                      const filteredProjects = currentYear 
+                        ? getFilteredProjectsByYear(currentYear)
+                        : projects
+                      
+                      return Object.entries(getGroupedProjects(filteredProjects)).map(([bodCategory, projects]) => (
+                        <div key={`project-${bodCategory}`}>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
+                            {bodCategory}
+                          </div>
+                          {projects.map((project) => (
+                            <SelectItem key={`project-${project.id}`} value={project.projectid} className="ml-4">
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="category">收支类型</Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择收支类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no-category">无分类</SelectItem>
+                    {categories
+                      .filter(category => category.isActive)
+                      .map((category) => (
+                        <SelectItem key={category.id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="bankAccountId">银行账户</Label>
+              <Select
+                value={selectedBankAccountId}
+                onValueChange={(value) => setSelectedBankAccountId(value)}
+                disabled
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {bankAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id!}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "保存中..." : isEditMode ? "更新交易" : "保存交易"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 粘贴导入对话框 */}
+      <PasteImportDialog
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
         existingTransactions={transactions}
-        bankAccounts={bankAccounts}
-        selectedBankAccountId={selectedBankAccountId}
         onImport={handleImport}
+        selectedBankAccountId={selectedBankAccountId}
+        bankAccounts={bankAccounts}
       />
+
+      {/* 删除确认对话框 */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确定要删除此交易吗？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>删除</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 } 

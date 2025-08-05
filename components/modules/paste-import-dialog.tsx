@@ -73,6 +73,13 @@ export function PasteImportDialog({
   const [isParsing, setIsParsing] = React.useState(false)
   const [parseError, setParseError] = React.useState<string>("")
   const [localBankAccounts, setLocalBankAccounts] = React.useState<BankAccount[]>(bankAccounts)
+
+  // 初始化银行账户列表
+  React.useEffect(() => {
+    if (bankAccounts.length > 0) {
+      setLocalBankAccounts(bankAccounts)
+    }
+  }, [bankAccounts])
   const [bankAccountsLoading, setBankAccountsLoading] = React.useState(false)
 
   const form = useForm<PasteImportFormData>({
@@ -96,10 +103,24 @@ export function PasteImportDialog({
       const accounts = await getBankAccounts()
       setLocalBankAccounts(accounts)
       
-      // 如果没有传入选中的银行账户，选择第一个活跃的账户
-      if (!selectedBankAccountId && accounts.length > 0) {
-        const activeAccount = accounts.find(acc => acc.isActive) || accounts[0]
-        form.setValue("bankAccountId", activeAccount.id!)
+      // 设置默认银行账户
+      if (accounts.length > 0) {
+        let defaultAccountId = selectedBankAccountId
+        
+        // 如果没有传入选中的银行账户，选择第一个活跃的账户
+        if (!defaultAccountId) {
+          const activeAccount = accounts.find(acc => acc.isActive) || accounts[0]
+          defaultAccountId = activeAccount.id!
+        }
+        
+        // 确保选择的银行账户在可用列表中
+        const accountExists = accounts.some(acc => acc.id === defaultAccountId)
+        if (!accountExists) {
+          const activeAccount = accounts.find(acc => acc.isActive) || accounts[0]
+          defaultAccountId = activeAccount.id!
+        }
+        
+        form.setValue("bankAccountId", defaultAccountId)
       }
     } catch (error) {
       console.error("Error loading bank accounts:", error)
@@ -111,9 +132,35 @@ export function PasteImportDialog({
   // 当对话框打开时加载银行账户
   React.useEffect(() => {
     if (open && currentUser) {
-      loadBankAccounts()
+      // 如果已经有银行账户列表，直接使用；否则加载
+      if (localBankAccounts.length === 0) {
+        loadBankAccounts()
+      } else {
+        // 确保表单有正确的默认值
+        const currentValue = form.getValues("bankAccountId")
+        if (!currentValue && localBankAccounts.length > 0) {
+          let defaultAccountId = selectedBankAccountId
+          if (!defaultAccountId) {
+            const activeAccount = localBankAccounts.find(acc => acc.isActive) || localBankAccounts[0]
+            defaultAccountId = activeAccount.id!
+          }
+          form.setValue("bankAccountId", defaultAccountId)
+        }
+      }
     }
-  }, [open, currentUser, loadBankAccounts])
+  }, [open, currentUser, loadBankAccounts, localBankAccounts, form, selectedBankAccountId])
+
+
+
+  // 当传入的银行账户ID改变时，更新表单
+  React.useEffect(() => {
+    if (selectedBankAccountId && localBankAccounts.length > 0) {
+      const accountExists = localBankAccounts.some(acc => acc.id === selectedBankAccountId)
+      if (accountExists) {
+        form.setValue("bankAccountId", selectedBankAccountId)
+      }
+    }
+  }, [selectedBankAccountId, localBankAccounts, form])
 
   // 解析粘贴的数据
   const parseData = React.useCallback((data: string, format: string, skipHeader: boolean) => {
@@ -403,25 +450,41 @@ export function PasteImportDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {localBankAccounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id!}>
-                            <div className="flex items-center space-x-2">
-                              <span>{account.name}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {account.currency}
-                              </Badge>
-                              {!account.isActive && (
-                                <Badge variant="secondary" className="text-xs">
-                                  已停用
-                                </Badge>
-                              )}
-                            </div>
+                        {localBankAccounts.length === 0 ? (
+                          <SelectItem value="" disabled>
+                            暂无可用银行账户
                           </SelectItem>
-                        ))}
+                        ) : (
+                          localBankAccounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id!}>
+                              <div className="flex items-center space-x-2">
+                                <span>{account.name}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {account.currency}
+                                </Badge>
+                                {!account.isActive && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    已停用
+                                  </Badge>
+                                )}
+                                {account.id === selectedBankAccountId && (
+                                  <Badge variant="default" className="text-xs">
+                                    当前
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormDescription>
                       选择要将交易记录导入到的银行账户
+                      {selectedBankAccountId && localBankAccounts.length > 0 && (
+                        <span className="text-green-600">
+                          （已预选当前银行账户）
+                        </span>
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

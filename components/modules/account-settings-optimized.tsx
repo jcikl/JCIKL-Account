@@ -32,7 +32,7 @@ import { useAuth } from "@/components/auth/auth-context"
 import { UserRoles, RoleLevels, type UserRole } from "@/lib/data"
 import { auth } from "@/lib/firebase"
 import { createUserWithEmailAndPassword } from "firebase/auth"
-import { CategoryManagement } from "./category-management"
+import { CategoryManagementOptimized } from "./category-management-optimized"
 import { LinksManager } from "./links-manager";
 
 export function AccountSettings() {
@@ -399,7 +399,7 @@ export function AccountSettings() {
         </TabsContent>
 
         <TabsContent value="categories" className="space-y-4">
-          <CategoryManagement />
+          <CategoryManagementOptimized />
         </TabsContent>
 
         <TabsContent value="links" className="space-y-4">

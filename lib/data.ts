@@ -194,4 +194,160 @@ export interface JournalEntry {
   createdByUid: string // Track who created the entry
 }
 
+// 商品管理相关类型定义
+export type MerchandiseType = "independent" | "clothing"
+export type ClothingSize = "XS" | "S" | "M" | "L" | "XL" | "XXL"
+export type ClothingCut = "Regular" | "Slim" | "Loose" | "Custom"
+
+export interface Merchandise {
+  id?: string
+  name: string
+  sku: string
+  type: MerchandiseType
+  location: string
+  description?: string
+  // 衣服特有属性
+  clothingSizes?: ClothingSize[]
+  clothingCut?: ClothingCut
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+export interface MerchandiseTransaction {
+  id?: string
+  merchandiseId: string
+  type: "buy" | "sell"
+  date: string
+  quantity: number
+  price: number
+  partnerName: string // 供应商或顾客
+  bankTransactionId?: string // 绝对匹配银行交易
+  // 衣服特有属性
+  clothingSize?: ClothingSize
+  clothingCut?: ClothingCut
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+export interface StockCardMovement {
+  id?: string
+  merchandiseId: string
+  date: string
+  type: "buy" | "sell" | "adjustment"
+  quantity: number
+  unitPrice: number
+  totalAmount: number
+  personName: string // 人名
+  category: string // 类别
+  warehouseLocation: string // 仓库地点
+  reference: string // 参考号
+  notes?: string
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+// 全局GL设置接口
+export interface GlobalGLSettings {
+  id?: string
+  // 商品管理相关设置
+  merchandiseAssetAccountId?: string // 商品购入时记入的资产账户
+  merchandiseCostAccountId?: string // 商品卖出时成本记入的账户
+  merchandiseIncomeAccountId?: string // 商品卖出时收入记入的账户
+  
+  // 项目账户相关设置
+  projectIncomeAccountId?: string // 项目收入记入的账户
+  projectExpenseAccountId?: string // 项目支出记入的账户
+  projectBudgetAccountId?: string // 项目预算账户
+  
+  // 会员管理相关设置
+  membershipIncomeAccountId?: string // 会员费收入记入的账户
+  membershipExpenseAccountId?: string // 会员费支出记入的账户（如有退款等）
+  
+  // 日常运作费用管理相关设置
+  operationExpenseAccountId?: string // 运作费用记入的账户
+  
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
 // 移除所有 sampleData，因为数据将从 Firebase 获取
+
+// 会员管理相关类型定义
+export type MembershipType = 
+  | "new" 
+  | "renewal" 
+  | "international_new" 
+  | "international_renewal" 
+  | "alumni_new" 
+  | "alumni_renewal" 
+  | "senator"
+
+export type MembershipStatus = "active" | "expired" | "pending"
+
+export interface Member {
+  id?: string
+  name: string
+  phone: string
+  referrer: string // 介绍人
+  birthDate: string
+  nationality: string // 国籍，默认马来西亚
+  senatorNumber?: string // 参议员号码
+  membershipType: MembershipType
+  status: MembershipStatus
+  membershipYear: number // 会员年度（如2024）
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+export interface MembershipPayment {
+  id?: string
+  memberId: string
+  amount: number
+  paymentDate: string
+  membershipYear: number
+  bankTransactionId?: string // 与银行交易匹配
+  notes?: string
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+export interface MembershipReminder {
+  id?: string
+  name: string
+  date: string // MM-DD格式
+  isActive: boolean
+  description?: string
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+
+
+// 日常运作费用管理相关类型定义
+export interface OperationExpense {
+  id?: string
+  purpose: string // 用途
+  annotation1?: string // 标注1
+  annotation2?: string // 标注2
+  glAccountId?: string // General Ledger 父账户
+  // 系统字段
+  createdAt: string
+  updatedAt: string
+  createdByUid: string
+}
+
+

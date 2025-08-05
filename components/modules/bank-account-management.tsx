@@ -89,6 +89,7 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
     setLoading(true)
     try {
       let accounts = await getBankAccounts()
+      console.log('【调试】fetchBankAccounts 拉取到的银行账户数据:', accounts)
       
       // 如果没有银行账户，自动初始化默认账户
       if (accounts.length === 0 && currentUser) {
@@ -236,22 +237,27 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
 
       const bankAccountData = {
         ...formData,
-        createdByUid: currentUser.uid
+        createdByUid: currentUser.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
       
       console.log('准备保存的银行账户数据:', bankAccountData)
 
       if (isEditMode && editingBankAccount?.id) {
-        console.log('更新银行账户:', editingBankAccount.id)
+        console.log('【调试】准备更新银行账户，ID:', editingBankAccount.id)
+        console.log('【调试】更新数据:', bankAccountData)
         await updateBankAccount(editingBankAccount.id, bankAccountData)
+        console.log('【调试】已调用updateBankAccount')
         toast({
           title: "成功",
           description: "银行账户已更新"
         })
       } else {
-        console.log('创建新银行账户')
+        console.log('【调试】准备创建新银行账户')
+        console.log('【调试】新建数据:', bankAccountData)
         const newAccountId = await addBankAccount(bankAccountData)
-        console.log('新银行账户ID:', newAccountId)
+        console.log('【调试】新银行账户ID:', newAccountId)
         toast({
           title: "成功",
           description: "银行账户已创建"

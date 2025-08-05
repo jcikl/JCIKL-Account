@@ -30,7 +30,7 @@ import type { Transaction, Account, Project, BankAccount } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
-import { TransactionImportDialog } from "./transaction-import-dialog"
+import { TransactionImportDialogOptimized } from "./transaction-import-dialog-optimized"
 import { PasteImportDialog } from "./paste-import-dialog"
 import { getCategories } from "@/lib/firebase-utils"
 import { type Category } from "@/lib/data"
@@ -2763,7 +2763,7 @@ export function BankTransactions() {
       </Dialog>
 
       {/* Transaction Import Dialog */}
-      <TransactionImportDialog
+      <TransactionImportDialogOptimized
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
         existingTransactions={transactions}

@@ -13,12 +13,12 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
-import { AccountFormDialog } from "./account-form-dialog"
-import { ExportDialog } from "./export-dialog"
-import { ImportDialog } from "./import-dialog"
-import { AccountSummary } from "./account-summary"
+import { AccountFormDialogOptimized } from "./account-form-dialog-optimized"
+import { ExportDialogOptimized } from "./export-dialog-optimized"
+import { ImportDialogEnhanced } from "./import-dialog-optimized"
+import { AccountSummaryOptimized } from "./account-summary-optimized"
 import { exportAccountData } from "@/lib/export-utils"
-import { addAccount, updateAccount, deleteAccount } from "@/lib/firebase-utils"
+import { addAccount, updateAccount, deleteAccount, deleteAccounts } from "@/lib/firebase-utils"
 import { useOptimizedAccounts } from "@/hooks/use-optimized-data"
 import { useToast } from "@/hooks/use-toast"
 import type { Account } from "@/lib/data"
@@ -202,6 +202,7 @@ export function AccountChartOptimized({
   const [showExportDialog, setShowExportDialog] = React.useState(false)
   const [showImportDialog, setShowImportDialog] = React.useState(false)
   const [showEnhancedSummary, setShowEnhancedSummary] = React.useState(false)
+  const [showBatchDeleteDialog, setShowBatchDeleteDialog] = React.useState(false)
 
   // 使用传入的账户数据或从Firebase加载
   const displayAccounts = propAccounts || accounts || []
@@ -358,6 +359,46 @@ export function AccountChartOptimized({
       setSaving(false)
     }
   }, [enableFirebase, refetchAccounts, toast])
+
+  // 批量删除处理函数
+  const handleBatchDelete = React.useCallback(async () => {
+    try {
+      setSaving(true)
+      const accountIdsToDelete = Array.from(selectedAccounts)
+      
+      if (accountIdsToDelete.length === 0) {
+        toast({
+          title: "没有选择账户",
+          description: "请先选择要删除的账户",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      await deleteAccounts(accountIdsToDelete)
+      
+      // 重新获取数据
+      if (enableFirebase) {
+        await refetchAccounts()
+      }
+      
+      setSelectedAccounts(new Set())
+      setShowBatchDeleteDialog(false)
+      
+      toast({
+        title: "批量删除成功",
+        description: `已删除 ${accountIdsToDelete.length} 个账户`,
+      })
+    } catch (error) {
+      toast({
+        title: "批量删除失败",
+        description: `删除账户时出错: ${error}`,
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }, [selectedAccounts, enableFirebase, refetchAccounts, toast])
 
   const handleViewAccount = React.useCallback((account: Account) => {
     setSelectedAccount(account)
@@ -537,6 +578,20 @@ export function AccountChartOptimized({
           <p className="text-muted-foreground">管理您的会计账户和分类账。</p>
         </div>
         <div className="flex gap-2">
+          {selectedAccounts.size > 0 && (
+            <Button 
+              variant="destructive" 
+              onClick={() => setShowBatchDeleteDialog(true)}
+              disabled={saving}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              批量删除 ({selectedAccounts.size})
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setShowImportDialog(true)}>
             <Upload className="h-4 w-4 mr-2" />
             导入账户
@@ -701,7 +756,7 @@ export function AccountChartOptimized({
       </Card>
 
       {/* 对话框组件 */}
-      <AccountFormDialog
+      <AccountFormDialogOptimized
         open={showAccountForm}
         onOpenChange={setShowAccountForm}
         account={editingAccount}
@@ -709,7 +764,7 @@ export function AccountChartOptimized({
         onSave={handleSaveAccount}
       />
 
-      <ExportDialog
+      <ExportDialogOptimized
         open={showExportDialog}
         onOpenChange={setShowExportDialog}
         accounts={displayAccounts}
@@ -719,7 +774,7 @@ export function AccountChartOptimized({
         totalCount={filteredAndSortedAccounts.length}
       />
 
-      <ImportDialog
+      <ImportDialogEnhanced
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         onImport={handleImport}
@@ -771,7 +826,81 @@ export function AccountChartOptimized({
             <DialogTitle>增强账户摘要</DialogTitle>
             <DialogDescription>详细的账户统计和分析</DialogDescription>
           </DialogHeader>
-          <AccountSummary accounts={displayAccounts} />
+          <AccountSummaryOptimized accounts={displayAccounts} />
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量删除确认对话框 */}
+      <Dialog open={showBatchDeleteDialog} onOpenChange={setShowBatchDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>确认批量删除</DialogTitle>
+            <DialogDescription>
+              您确定要删除选中的 {selectedAccounts.size} 个账户吗？此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start space-x-2">
+                <Trash2 className="h-5 w-5 text-red-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">警告</p>
+                  <p className="text-sm text-red-700 mt-1">
+                    删除账户将永久移除所有相关数据，包括交易记录和余额信息。请确保您已备份重要数据。
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {selectedAccounts.size > 0 && (
+              <div className="max-h-40 overflow-y-auto">
+                <p className="text-sm font-medium mb-2">将要删除的账户：</p>
+                <div className="space-y-1">
+                  {Array.from(selectedAccounts).slice(0, 10).map(accountId => {
+                    const account = displayAccounts.find(a => a.id === accountId)
+                    return account ? (
+                      <div key={accountId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div>
+                          <p className="text-sm font-medium">{account.code} - {account.name}</p>
+                          <p className="text-xs text-muted-foreground">{account.type}</p>
+                        </div>
+                        <span className="text-sm font-mono">${account.balance.toLocaleString()}</span>
+                      </div>
+                    ) : null
+                  })}
+                  {selectedAccounts.size > 10 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      还有 {selectedAccounts.size - 10} 个账户...
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setShowBatchDeleteDialog(false)}>
+              取消
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleBatchDelete}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  删除中...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  确认删除
+                </>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

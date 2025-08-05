@@ -17,7 +17,8 @@ import { useOptimizedAccounts, useOptimizedTransactions } from "@/hooks/use-opti
 import type { Account, Transaction } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
-import { AccountChart } from "./account-chart"
+import { AccountChartOptimized } from "./account-chart-optimized"
+import { GLSettingsManagement } from "./gl-settings-management"
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 
@@ -499,6 +500,7 @@ export function GeneralLedgerOptimized() {
           <TabsTrigger value="transactions">所有交易</TabsTrigger>
           <TabsTrigger value="accounts">账户图表</TabsTrigger>
           <TabsTrigger value="summary">账户摘要</TabsTrigger>
+          <TabsTrigger value="settings">全局设置</TabsTrigger>
         </TabsList>
 
         <TabsContent value="transactions" className="space-y-4">
@@ -559,7 +561,7 @@ export function GeneralLedgerOptimized() {
         </TabsContent>
 
         <TabsContent value="accounts" className="space-y-4">
-          <AccountChart 
+          <AccountChartOptimized 
             accounts={accounts || []}
             onAccountSelect={(account) => console.log('选择账户:', account)}
             onAccountEdit={(account) => console.log('编辑账户:', account)}
@@ -569,7 +571,7 @@ export function GeneralLedgerOptimized() {
         </TabsContent>
 
         <TabsContent value="summary" className="space-y-4">
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
             {["Asset", "Liability", "Equity", "Revenue", "Expense"].map((type) => (
               <StatCard key={type} type={type} accounts={accounts || []} />
             ))}
@@ -609,6 +611,10 @@ export function GeneralLedgerOptimized() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <GLSettingsManagement />
         </TabsContent>
       </Tabs>
     </div>

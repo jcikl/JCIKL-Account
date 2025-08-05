@@ -18,10 +18,10 @@ import {
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories, type Project } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
-import { ProjectFormDialog } from "./project-form-dialog"
+import { ProjectFormDialogOptimized } from "./project-form-dialog-optimized"
 import { ProjectImportDialog } from "./project-import-dialog"
 import { ProjectPasteImportDialog } from "./project-paste-import-dialog"
-import { ProjectDetailsDialog } from "./project-details-dialog"
+import { ProjectDetailsDialogOptimized } from "./project-details-dialog-optimized"
 import { getProjectStatsByBOD, getBODDisplayName } from "@/lib/project-utils"
 import { useOptimizedProjects, useOptimizedProjectSpentAmounts } from "@/hooks/use-optimized-data"
 import { globalCache } from "@/lib/optimized-cache"
@@ -62,7 +62,7 @@ export function ProjectAccountsOptimized() {
     loading: spentAmountsLoading,
     error: spentAmountsError 
   } = useOptimizedProjectSpentAmounts(
-    projects ? projects.map(project => project.projectid) : []
+    projects ? projects.map(project => project.id!) : []
   )
 
   // 状态管理
@@ -910,7 +910,7 @@ export function ProjectAccountsOptimized() {
       </Tabs>
 
       {/* Project Form Dialog */}
-      <ProjectFormDialog
+      <ProjectFormDialogOptimized
         open={showProjectForm}
         onOpenChange={setShowProjectForm}
         project={editingProject}
@@ -935,7 +935,7 @@ export function ProjectAccountsOptimized() {
       />
 
       {/* Project Details Dialog */}
-      <ProjectDetailsDialog
+      <ProjectDetailsDialogOptimized
         open={showProjectDetails}
         onOpenChange={setShowProjectDetails}
         project={selectedProject}

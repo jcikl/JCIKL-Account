@@ -1,6 +1,6 @@
-import { JournalEntries } from "@/components/modules/journal-entries"
-import { ProjectAccounts } from "@/components/modules/project-accounts"
-import { GeneralLedger } from "@/components/modules/general-ledger"
+import { JournalEntriesOptimized } from "@/components/modules/journal-entries-optimized"
+import { ProjectAccountsOptimized } from "@/components/modules/project-accounts-optimized"
+
 import { BankTransactions } from "@/components/modules/bank-transactions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -17,7 +17,7 @@ export default function TestAllPaginationPage() {
           <TabsTrigger value="bank">银行交易</TabsTrigger>
           <TabsTrigger value="journal">日记账分录</TabsTrigger>
           <TabsTrigger value="projects">项目账户</TabsTrigger>
-          <TabsTrigger value="ledger">总账</TabsTrigger>
+
         </TabsList>
         
         <TabsContent value="bank" className="space-y-4">
@@ -25,16 +25,14 @@ export default function TestAllPaginationPage() {
         </TabsContent>
         
         <TabsContent value="journal" className="space-y-4">
-          <JournalEntries />
+          <JournalEntriesOptimized />
         </TabsContent>
         
         <TabsContent value="projects" className="space-y-4">
-          <ProjectAccounts />
+          <ProjectAccountsOptimized />
         </TabsContent>
         
-        <TabsContent value="ledger" className="space-y-4">
-          <GeneralLedger />
-        </TabsContent>
+
       </Tabs>
     </div>
   )

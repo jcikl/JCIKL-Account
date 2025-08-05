@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AccountChart } from "@/components/modules/account-chart"
+import { AccountChartOptimized } from "@/components/modules/account-chart-optimized"
 import type { Account } from "@/lib/data"
 
 export default function TestAccountAddPage() {
@@ -99,7 +99,7 @@ export default function TestAccountAddPage() {
           </div>
         </div>
         
-        <AccountChart 
+        <AccountChartOptimized 
           accounts={accounts}
           onAccountSelect={handleAccountSelect}
           onAccountEdit={handleAccountEdit}

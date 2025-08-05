@@ -28,6 +28,7 @@ interface NavigationData {
   accounts: NavigationItem[]
   reports: NavigationItem[]
   settings: NavigationItem[]
+  management?: NavigationItem[]
 }
 
 interface AppSidebarProps {
@@ -121,6 +122,26 @@ export function AppSidebar({ currentPage, setCurrentPage, navigationData, hasPer
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationData.reports.map((item) =>
+                hasPermission(item.requiredLevel) ? (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={currentPage === item.title}>
+                      <button onClick={() => setCurrentPage(item.title)}>
+                        <item.icon className="size-4" />
+                        <span>{item.title}</span>
+                      </button>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null,
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navigationData.management?.map((item) =>
                 hasPermission(item.requiredLevel) ? (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={currentPage === item.title}>

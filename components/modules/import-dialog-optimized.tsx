@@ -10,20 +10,24 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Clipboard, Upload, AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { Clipboard, Upload, AlertCircle, CheckCircle, XCircle, FileText, Settings, Database } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import type { Account } from "@/lib/data"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { Account, GlobalGLSettings } from "@/lib/data"
 
 const importFormSchema = z.object({
   data: z.string().min(1, "请输入要导入的数据"),
-  format: z.enum(["csv", "excel", "tsv"], {
+  format: z.enum(["csv", "excel", "tsv", "json"], {
     required_error: "请选择数据格式"
   }),
   skipHeader: z.boolean().default(true),
   updateExisting: z.boolean().default(false),
-  validateData: z.boolean().default(true)
+  validateData: z.boolean().default(true),
+  importGLSettings: z.boolean().default(false),
+  importTransactionMappings: z.boolean().default(false)
 })
 
 type ImportFormData = z.infer<typeof importFormSchema>
@@ -34,114 +38,43 @@ interface ParsedAccount {
   type: "Asset" | "Liability" | "Equity" | "Revenue" | "Expense"
   financialStatement: string
   description?: string
+  balance?: number
+  parent?: string
   isValid: boolean
   errors: string[]
   isUpdate?: boolean
 }
 
-interface ImportDialogProps {
+interface ImportedData {
+  accounts: ParsedAccount[]
+  glSettings?: Partial<GlobalGLSettings>
+  transactionMappings?: Record<string, string>
+  metadata?: {
+    version: string
+    description: string
+    totalAccounts: number
+    accountTypes: Record<string, number>
+  }
+}
+
+interface ImportDialogEnhancedProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   existingAccounts: Account[]
   onImport: (accounts: ParsedAccount[]) => void
+  onImportGLSettings?: (settings: Partial<GlobalGLSettings>) => void
+  onImportTransactionMappings?: (mappings: Record<string, string>) => void
 }
 
-// 优化的格式选项组件
-const FormatOption = React.memo(({ 
-  value, 
-  label, 
-  description 
-}: { 
-  value: string
-  label: string
-  description: string 
-}) => (
-  <SelectItem value={value}>
-    <div className="flex flex-col">
-      <span className="font-medium">{label}</span>
-      <span className="text-xs text-muted-foreground">{description}</span>
-    </div>
-  </SelectItem>
-))
-
-// 优化的复选框选项组件
-const CheckboxOption = React.memo(({
-  control,
-  name,
-  label,
-  description
-}: {
-  control: any
-  name: string
-  label: string
-  description: string
-}) => (
-  <FormField
-    control={control}
-    name={name}
-    render={({ field }) => (
-      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-        <FormControl>
-          <Checkbox
-            checked={field.value}
-            onCheckedChange={field.onChange}
-          />
-        </FormControl>
-        <div className="space-y-1 leading-none">
-          <FormLabel>{label}</FormLabel>
-          <FormDescription>
-            {description}
-          </FormDescription>
-        </div>
-      </FormItem>
-    )}
-  />
-))
-
-// 优化的账户验证状态组件
-const AccountValidationStatus = React.memo(({ 
-  account 
-}: { 
-  account: ParsedAccount 
-}) => (
-  <div className="flex items-center space-x-2">
-    {account.isValid ? (
-      <CheckCircle className="h-4 w-4 text-green-600" />
-    ) : (
-      <XCircle className="h-4 w-4 text-red-600" />
-    )}
-    <span className={`text-sm ${account.isValid ? 'text-green-600' : 'text-red-600'}`}>
-      {account.code} - {account.name}
-    </span>
-  </div>
-))
-
-// 优化的统计卡片组件
-const StatCard = React.memo(({ 
-  title, 
-  value, 
-  icon: Icon, 
-  color = "" 
-}: { 
-  title: string
-  value: number
-  icon: React.ComponentType<{ className?: string }>
-  color?: string
-}) => (
-  <div className="flex items-center space-x-2 p-2 border rounded">
-    <Icon className={`h-4 w-4 ${color}`} />
-    <span className="text-sm font-medium">{title}:</span>
-    <span className="text-sm">{value}</span>
-  </div>
-))
-
-export function ImportDialogOptimized({
+export function ImportDialogEnhanced({
   open,
   onOpenChange,
   existingAccounts,
-  onImport
-}: ImportDialogProps) {
-  const [parsedAccounts, setParsedAccounts] = React.useState<ParsedAccount[]>([])
+  onImport,
+  onImportGLSettings,
+  onImportTransactionMappings
+}: ImportDialogEnhancedProps) {
+  const [importedData, setImportedData] = React.useState<ImportedData | null>(null)
   const [isParsing, setIsParsing] = React.useState(false)
   const [parseError, setParseError] = React.useState<string>("")
 
@@ -149,350 +82,616 @@ export function ImportDialogOptimized({
     resolver: zodResolver(importFormSchema),
     defaultValues: {
       data: "",
-      format: "csv",
+      format: "json",
       skipHeader: true,
       updateExisting: false,
-      validateData: true
+      validateData: true,
+      importGLSettings: true,
+      importTransactionMappings: true
     }
   })
 
-  // 优化的数据解析函数
+  // 解析JSON格式的导入数据
+  const parseJSONData = React.useCallback((data: string) => {
+    try {
+      const jsonData = JSON.parse(data)
+      
+      // 验证JSON结构
+      if (!jsonData.accounts || !Array.isArray(jsonData.accounts)) {
+        throw new Error("JSON文件必须包含 'accounts' 数组")
+      }
+
+      const updateExisting = form.getValues("updateExisting")
+      
+      const accounts: ParsedAccount[] = jsonData.accounts.map((account: any) => {
+        const errors: string[] = []
+
+        // 验证必需字段
+        if (!account.code) {
+          errors.push("账户代码不能为空")
+        }
+        if (!account.name) {
+          errors.push("账户名称不能为空")
+        }
+        if (!account.type) {
+          errors.push("账户类型不能为空")
+        }
+
+        // 验证账户类型
+        const validTypes = ["Asset", "Liability", "Equity", "Revenue", "Expense"]
+        if (account.type && !validTypes.includes(account.type)) {
+          errors.push(`账户类型必须是以下之一: ${validTypes.join(', ')}`)
+        }
+
+        // 检查重复的账户代码
+        const existingAccount = existingAccounts.find(acc => acc.code === account.code)
+        if (existingAccount && !updateExisting) {
+          errors.push("账户代码已存在，请勾选'更新现有账户'选项来更新")
+        }
+
+        return {
+          code: account.code || "",
+          name: account.name || "",
+          type: account.type || "Asset",
+          financialStatement: account.financialStatement || (() => {
+            const balanceSheetTypes = ["Asset", "Liability", "Equity"]
+            return balanceSheetTypes.includes(account.type) ? "Balance Sheet" : "Income Statement"
+          })(),
+          description: account.description || "",
+          balance: account.balance || 0,
+          parent: account.parent || "",
+          isValid: errors.length === 0,
+          errors,
+          isUpdate: existingAccount ? true : false
+        }
+      })
+
+      return {
+        accounts,
+        glSettings: jsonData.glSettings,
+        transactionMappings: jsonData.transactionMappings,
+        metadata: jsonData.metadata
+      }
+    } catch (error) {
+      throw new Error(`JSON解析失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    }
+  }, [existingAccounts, form])
+
+  // 解析CSV/TSV格式的数据
+  const parseCSVData = React.useCallback((data: string, format: string, skipHeader: boolean) => {
+    const lines = data.trim().split('\n')
+    if (lines.length === 0) {
+      throw new Error("没有找到有效的数据行")
+    }
+
+    const dataLines = skipHeader ? lines.slice(1) : lines
+    const updateExisting = form.getValues("updateExisting")
+    
+    const accounts: ParsedAccount[] = dataLines.map((line) => {
+      const errors: string[] = []
+      let fields: string[]
+
+      switch (format) {
+        case "csv":
+          fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
+          break
+        case "tsv":
+          fields = line.split('\t').map(field => field.trim())
+          break
+        default:
+          fields = line.split(',').map(field => field.trim())
+      }
+
+      if (fields.length < 3) {
+        errors.push("字段数量不足，需要至少：账户代码、账户类型、账户名称")
+      }
+
+      const [code, type, name, financialStatement = "", description = "", balance = "0", parent = ""] = fields
+
+      // 验证字段
+      if (!code) errors.push("账户代码不能为空")
+      if (!name) errors.push("账户名称不能为空")
+      
+      const validTypes = ["Asset", "Liability", "Equity", "Revenue", "Expense"]
+      if (!type || !validTypes.includes(type)) {
+        errors.push(`账户类型必须是以下之一: ${validTypes.join(', ')}`)
+      }
+
+      const existingAccount = existingAccounts.find(acc => acc.code === code)
+      if (existingAccount && !updateExisting) {
+        errors.push("账户代码已存在，请勾选'更新现有账户'选项来更新")
+      }
+
+      const autoFinancialStatement = financialStatement || (() => {
+        const balanceSheetTypes = ["Asset", "Liability", "Equity"]
+        return balanceSheetTypes.includes(type) ? "Balance Sheet" : "Income Statement"
+      })()
+
+      return {
+        code: code || "",
+        name: name || "",
+        type: (type as any) || "Asset",
+        financialStatement: autoFinancialStatement,
+        description: description || "",
+        balance: parseFloat(balance) || 0,
+        parent: parent || "",
+        isValid: errors.length === 0,
+        errors,
+        isUpdate: existingAccount ? true : false
+      }
+    })
+
+    return { accounts }
+  }, [existingAccounts, form])
+
+  // 解析数据
   const parseData = React.useCallback((data: string, format: string, skipHeader: boolean) => {
     setIsParsing(true)
     setParseError("")
     
     try {
-      const lines = data.trim().split('\n')
-      if (lines.length === 0) {
-        throw new Error("没有找到有效的数据行")
+      let result: ImportedData
+
+      if (format === "json") {
+        result = parseJSONData(data)
+      } else {
+        result = parseCSVData(data, format, skipHeader)
       }
 
-      const dataLines = skipHeader ? lines.slice(1) : lines
-      const updateExisting = form.getValues("updateExisting")
-      
-      const accounts: ParsedAccount[] = dataLines.map((line, index) => {
-        const errors: string[] = []
-        let fields: string[]
-
-        switch (format) {
-          case "csv":
-            fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
-            break
-          case "tsv":
-            fields = line.split('\t').map(field => field.trim())
-            break
-          case "excel":
-            fields = line.split(',').map(field => field.trim().replace(/^["']|["']$/g, ''))
-            break
-          default:
-            throw new Error(`不支持的数据格式: ${format}`)
-        }
-
-        if (fields.length < 3) {
-          errors.push("数据字段不足，至少需要代码、类型、名称")
-        }
-
-        const [code, type, name, financialStatement = '', description = ''] = fields
-
-        // 验证必填字段
-        if (!code) errors.push("账户代码不能为空")
-        if (!name) errors.push("账户名称不能为空")
-        if (!type) errors.push("账户类型不能为空")
-
-        // 验证账户类型
-        const validTypes = ["Asset", "Liability", "Equity", "Revenue", "Expense"]
-        if (type && !validTypes.includes(type)) {
-          errors.push(`无效的账户类型: ${type}`)
-        }
-
-        // 检查重复账户
-        const existingAccount = existingAccounts.find(acc => acc.code === code)
-        if (existingAccount && !updateExisting) {
-          errors.push("账户代码已存在")
-        }
-
-        // 自动确定财务报表分类
-        const autoFinancialStatement = financialStatement || (() => {
-          const balanceSheetTypes = ['Asset', 'Liability', 'Equity']
-          return balanceSheetTypes.includes(type) ? 'Balance Sheet' : 'Income Statement'
-        })()
-
-        return {
-          code: code || '',
-          name: name || '',
-          type: type as any,
-          financialStatement: autoFinancialStatement,
-          description: description || '',
-          isValid: errors.length === 0,
-          errors,
-          isUpdate: existingAccount && updateExisting
-        }
-      })
-
-      setParsedAccounts(accounts)
-      setParseError("")
+      setImportedData(result)
     } catch (error) {
       setParseError(error instanceof Error ? error.message : "解析数据时发生错误")
-      setParsedAccounts([])
+      setImportedData(null)
     } finally {
       setIsParsing(false)
     }
-  }, [existingAccounts, form])
+  }, [parseJSONData, parseCSVData])
 
-  // 优化的粘贴处理
-  const handlePaste = React.useCallback(async () => {
+  // 监听数据变化，自动解析
+  React.useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "data" || name === "format" || name === "skipHeader") {
+        const data = form.getValues("data")
+        const format = form.getValues("format")
+        const skipHeader = form.getValues("skipHeader")
+        
+        if (data && data.trim().length > 0) {
+          parseData(data, format, skipHeader)
+        }
+      }
+    })
+    
+    return () => subscription.unsubscribe()
+  }, [form, parseData])
+
+  // 处理粘贴事件
+  const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText()
       form.setValue("data", text)
-      const format = form.getValues("format")
-      const skipHeader = form.getValues("skipHeader")
-      parseData(text, format, skipHeader)
     } catch (error) {
-      console.error('粘贴失败:', error)
-      setParseError("无法从剪贴板读取数据")
+      console.error("无法访问剪贴板:", error)
+      alert("请手动粘贴数据到文本框中")
     }
-  }, [form, parseData])
+  }
 
-  // 优化的导入处理
-  const handleImport = React.useCallback(() => {
-    const validAccounts = parsedAccounts.filter(account => account.isValid)
-    if (validAccounts.length > 0) {
-      onImport(validAccounts)
-      onOpenChange(false)
-      // 延迟重置表单
-      setTimeout(() => {
-        form.reset()
-        setParsedAccounts([])
-        setParseError("")
-      }, 100)
+  // 处理文件上传
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      form.setValue("data", content)
+      
+      // 根据文件扩展名自动设置格式
+      const extension = file.name.split('.').pop()?.toLowerCase()
+      if (extension === 'json') {
+        form.setValue("format", "json")
+      } else if (extension === 'csv') {
+        form.setValue("format", "csv")
+      } else if (extension === 'tsv') {
+        form.setValue("format", "tsv")
+      }
     }
-  }, [parsedAccounts, onImport, onOpenChange, form])
+    reader.readAsText(file)
+  }
 
-  // 优化的取消处理
-  const handleCancel = React.useCallback(() => {
+  // 处理导入
+  const handleImport = () => {
+    if (!importedData?.accounts) return
+
+    const validAccounts = importedData.accounts.filter(account => account.isValid)
+    if (validAccounts.length === 0) {
+      alert("没有有效的账户数据可以导入")
+      return
+    }
+
+    // 导入账户
+    onImport(validAccounts)
+
+    // 导入GL设置
+    if (importedData.glSettings && form.getValues("importGLSettings") && onImportGLSettings) {
+      onImportGLSettings(importedData.glSettings)
+    }
+
+    // 导入交易映射
+    if (importedData.transactionMappings && form.getValues("importTransactionMappings") && onImportTransactionMappings) {
+      onImportTransactionMappings(importedData.transactionMappings)
+    }
+
     onOpenChange(false)
-    // 延迟重置表单
-    setTimeout(() => {
-      form.reset()
-      setParsedAccounts([])
-      setParseError("")
-    }, 100)
-  }, [onOpenChange, form])
+  }
 
-  // 优化的格式选项
-  const formatOptions = React.useMemo(() => [
-    { value: "csv", label: "CSV", description: "逗号分隔值格式" },
-    { value: "tsv", label: "TSV", description: "制表符分隔值格式" },
-    { value: "excel", label: "Excel", description: "Excel表格格式" }
-  ], [])
+  // 处理取消
+  const handleCancel = () => {
+    setImportedData(null)
+    setParseError("")
+    form.reset()
+    onOpenChange(false)
+  }
 
-  // 优化的统计数据
-  const stats = React.useMemo(() => {
-    const total = parsedAccounts.length
-    const valid = parsedAccounts.filter(acc => acc.isValid).length
-    const invalid = total - valid
-    const updates = parsedAccounts.filter(acc => acc.isUpdate).length
-    const newAccounts = valid - updates
-
-    return { total, valid, invalid, updates, newAccounts }
-  }, [parsedAccounts])
-
-  // 优化的有效账户列表
-  const validAccounts = React.useMemo(() => 
-    parsedAccounts.filter(account => account.isValid), 
-    [parsedAccounts]
-  )
-
-  // 优化的无效账户列表
-  const invalidAccounts = React.useMemo(() => 
-    parsedAccounts.filter(account => !account.isValid), 
-    [parsedAccounts]
-  )
+  const validAccounts = importedData?.accounts?.filter(acc => acc.isValid) || []
+  const invalidAccounts = importedData?.accounts?.filter(acc => !acc.isValid) || []
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>导入账户数据</DialogTitle>
+          <DialogTitle>导入GL账户数据</DialogTitle>
           <DialogDescription>
-            从剪贴板或文件导入账户数据，支持CSV、TSV和Excel格式
+            支持JSON、CSV、TSV格式的账户数据导入，包括GL设置和交易映射关系
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="format"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>数据格式</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="选择数据格式" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {formatOptions.map((option) => (
-                          <FormatOption
-                            key={option.value}
-                            value={option.value}
-                            label={option.label}
-                            description={option.description}
-                          />
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      选择要导入的数据格式
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <Tabs defaultValue="import" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="import">数据导入</TabsTrigger>
+                <TabsTrigger value="preview">数据预览</TabsTrigger>
+                <TabsTrigger value="settings">导入设置</TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-4">
-                <CheckboxOption
-                  control={form.control}
-                  name="skipHeader"
-                  label="跳过标题行"
-                  description="如果数据包含标题行，请勾选此项"
-                />
+              <TabsContent value="import" className="space-y-4">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="format"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>数据格式</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择数据格式" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="json">JSON格式 (推荐)</SelectItem>
+                            <SelectItem value="csv">CSV格式</SelectItem>
+                            <SelectItem value="tsv">TSV格式</SelectItem>
+                            <SelectItem value="excel">Excel格式</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          JSON格式支持完整的GL设置和交易映射导入
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
 
-                <CheckboxOption
-                  control={form.control}
-                  name="updateExisting"
-                  label="更新现有账户"
-                  description="如果账户代码已存在，更新现有账户信息"
-                />
-
-                <CheckboxOption
-                  control={form.control}
-                  name="validateData"
-                  label="验证数据"
-                  description="导入前验证数据格式和完整性"
-                />
-              </div>
-            </div>
-
-            <FormField
-              control={form.control}
-              name="data"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>数据内容</FormLabel>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handlePaste}
-                        disabled={isParsing}
-                      >
-                        <Clipboard className="h-4 w-4 mr-2" />
-                        从剪贴板粘贴
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={handlePaste}>
+                      <Clipboard className="h-4 w-4 mr-2" />
+                      从剪贴板粘贴
+                    </Button>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".json,.csv,.tsv,.xlsx,.xls"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <Button type="button" variant="outline">
+                        <Upload className="h-4 w-4 mr-2" />
+                        选择文件
                       </Button>
                     </div>
-                    <FormControl>
-                      <Textarea
-                        placeholder="粘贴或输入要导入的数据..."
-                        className="min-h-[200px] font-mono text-sm"
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e)
-                          const format = form.getValues("format")
-                          const skipHeader = form.getValues("skipHeader")
-                          parseData(e.target.value, format, skipHeader)
-                        }}
-                      />
-                    </FormControl>
                   </div>
-                  <FormDescription>
-                    支持格式：代码,类型,名称,财务报表,描述
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
-            {parseError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{parseError}</AlertDescription>
-              </Alert>
-            )}
+                  <FormField
+                    control={form.control}
+                    name="data"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>数据内容</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="粘贴或输入要导入的数据..."
+                            className="min-h-[200px] font-mono text-sm"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-            {parsedAccounts.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">解析结果</h3>
-                  <div className="flex gap-2">
-                    <StatCard
-                      title="总计"
-                      value={stats.total}
-                      icon={Upload}
+                  {form.watch("format") !== "json" && (
+                    <FormField
+                      control={form.control}
+                      name="skipHeader"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>跳过标题行</FormLabel>
+                            <FormDescription>
+                              如果数据包含标题行，请勾选此项
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
                     />
-                    <StatCard
-                      title="有效"
-                      value={stats.valid}
-                      icon={CheckCircle}
-                      color="text-green-600"
-                    />
-                    <StatCard
-                      title="无效"
-                      value={stats.invalid}
-                      icon={XCircle}
-                      color="text-red-600"
-                    />
-                    <StatCard
-                      title="新增"
-                      value={stats.newAccounts}
-                      icon={Upload}
-                      color="text-blue-600"
-                    />
-                    <StatCard
-                      title="更新"
-                      value={stats.updates}
-                      icon={Upload}
-                      color="text-orange-600"
-                    />
-                  </div>
+                  )}
                 </div>
+              </TabsContent>
 
-                {validAccounts.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-green-600">有效账户 ({validAccounts.length})</h4>
-                    <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                      {validAccounts.map((account, index) => (
-                        <AccountValidationStatus key={index} account={account} />
-                      ))}
-                    </div>
-                  </div>
+              <TabsContent value="preview" className="space-y-4">
+                {isParsing && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>正在解析数据...</AlertDescription>
+                  </Alert>
                 )}
 
-                {invalidAccounts.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-red-600">无效账户 ({invalidAccounts.length})</h4>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {invalidAccounts.map((account, index) => (
-                        <div key={index} className="text-sm">
-                          <div className="flex items-center space-x-2">
+                {parseError && (
+                  <Alert variant="destructive">
+                    <XCircle className="h-4 w-4" />
+                    <AlertDescription>{parseError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {importedData && (
+                  <div className="space-y-4">
+                    {/* 元数据信息 */}
+                    {importedData.metadata && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            文件信息
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium">版本:</span> {importedData.metadata.version}
+                            </div>
+                            <div>
+                              <span className="font-medium">描述:</span> {importedData.metadata.description}
+                            </div>
+                            <div>
+                              <span className="font-medium">总账户数:</span> {importedData.metadata.totalAccounts}
+                            </div>
+                            <div>
+                              <span className="font-medium">账户类型分布:</span>
+                              <div className="mt-1">
+                                {Object.entries(importedData.metadata.accountTypes).map(([type, count]) => (
+                                  <Badge key={type} variant="outline" className="mr-1 mb-1">
+                                    {type}: {count}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* 有效账户 */}
+                    {validAccounts.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            有效账户 ({validAccounts.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {validAccounts.map((account, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 border rounded">
+                                <div>
+                                  <div className="font-medium">{account.code} - {account.name}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {account.type} • {account.financialStatement}
+                                  </div>
+                                </div>
+                                <Badge variant={account.isUpdate ? "secondary" : "default"}>
+                                  {account.isUpdate ? "更新" : "新增"}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* 无效账户 */}
+                    {invalidAccounts.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
                             <XCircle className="h-4 w-4 text-red-600" />
-                            <span className="text-red-600">{account.code} - {account.name}</span>
+                            无效账户 ({invalidAccounts.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {invalidAccounts.map((account, index) => (
+                              <div key={index} className="p-2 border border-red-200 rounded bg-red-50">
+                                <div className="font-medium">{account.code} - {account.name}</div>
+                                <div className="text-sm text-red-600">
+                                  {account.errors.join(', ')}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div className="ml-6 text-xs text-red-500">
-                            {account.errors.join(', ')}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* GL设置预览 */}
+                    {importedData.glSettings && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Settings className="h-4 w-4" />
+                            GL设置配置
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            {Object.entries(importedData.glSettings).map(([key, value]) => (
+                              <div key={key}>
+                                <span className="font-medium">{key}:</span> {value}
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* 交易映射预览 */}
+                    {importedData.transactionMappings && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Database className="h-4 w-4" />
+                            交易映射关系 ({Object.keys(importedData.transactionMappings).length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-2 text-sm max-h-40 overflow-y-auto">
+                            {Object.entries(importedData.transactionMappings).map(([transaction, accountCode]) => (
+                              <div key={transaction} className="p-1 border rounded">
+                                <div className="font-medium">{transaction}</div>
+                                <div className="text-muted-foreground">→ {accountCode}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
+
+              <TabsContent value="settings" className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="updateExisting"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>更新现有账户</FormLabel>
+                        <FormDescription>
+                          如果账户代码已存在，更新现有账户信息而不是跳过
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="validateData"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>验证数据</FormLabel>
+                        <FormDescription>
+                          导入前验证数据格式和完整性
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("format") === "json" && (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <h4 className="font-medium">JSON格式特有选项</h4>
+                      
+                      <FormField
+                        control={form.control}
+                        name="importGLSettings"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>导入GL设置</FormLabel>
+                              <FormDescription>
+                                同时导入GL设置配置（商品管理、项目账户等）
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="importTransactionMappings"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>导入交易映射</FormLabel>
+                              <FormDescription>
+                                同时导入交易类型与GL账户的映射关系
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            <Separator />
 
             <div className="flex justify-end space-x-2">
               <Button type="button" variant="outline" onClick={handleCancel}>
@@ -501,10 +700,9 @@ export function ImportDialogOptimized({
               <Button 
                 type="button" 
                 onClick={handleImport}
-                disabled={validAccounts.length === 0 || isParsing}
+                disabled={!importedData || validAccounts.length === 0 || isParsing}
               >
-                <Upload className="h-4 w-4 mr-2" />
-                导入 {validAccounts.length > 0 ? `(${validAccounts.length} 个账户)` : ''}
+                导入数据 ({validAccounts.length} 个账户)
               </Button>
             </div>
           </form>
@@ -512,4 +710,4 @@ export function ImportDialogOptimized({
       </DialogContent>
     </Dialog>
   )
-} 
+}

@@ -36,6 +36,7 @@ interface ParsedTransaction {
   description2?: string
   expense: number
   income: number
+  status: "Completed" | "Pending" | "Draft"
   reference?: string
   category?: string
   isValid: boolean
@@ -285,6 +286,7 @@ export function TransactionImportDialogOptimized({
           description2: description2 || '',
           income,
           expense,
+          status: "Completed" as const,
           category: category || '',
           reference: reference || '',
           isValid: errors.length === 0,

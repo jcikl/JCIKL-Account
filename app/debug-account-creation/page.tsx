@@ -1,8 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { AccountChart } from "@/components/modules/account-chart"
-import { AccountFormDialog } from "@/components/modules/account-form-dialog"
+import { AccountChartOptimized } from "@/components/modules/account-chart-optimized"
+import { AccountFormDialogOptimized } from "@/components/modules/account-form-dialog-optimized"
 import type { Account } from "@/lib/data"
 
 export default function DebugAccountCreationPage() {
@@ -118,7 +118,7 @@ export default function DebugAccountCreationPage() {
           {/* 账户图表 */}
           <div>
             <h2 className="text-xl font-semibold mb-4">账户图表</h2>
-            <AccountChart 
+            <AccountChartOptimized 
               accounts={accounts}
               onAccountSelect={handleAccountSelect}
               onAccountEdit={handleAccountEdit}
@@ -147,7 +147,7 @@ export default function DebugAccountCreationPage() {
         </div>
 
         {/* 手动表单对话框 */}
-        <AccountFormDialog
+        <AccountFormDialogOptimized
           open={showForm}
           onOpenChange={setShowForm}
           account={null}

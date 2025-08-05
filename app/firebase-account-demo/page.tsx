@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AccountChart } from "@/components/modules/account-chart"
+import { AccountChartOptimized } from "@/components/modules/account-chart-optimized"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -164,7 +164,7 @@ export default function FirebaseAccountDemoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <AccountChart 
+              <AccountChartOptimized 
                 enableFirebase={true}
                 onAccountSelect={(account) => {
                   console.log('选择账户:', account)

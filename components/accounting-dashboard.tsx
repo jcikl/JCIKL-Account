@@ -12,6 +12,8 @@ import {
   Scale,
   Settings,
   TrendingUp,
+  Box,
+  DollarSign,
 } from "lucide-react"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -23,7 +25,7 @@ import { JournalEntries } from "@/components/modules/journal-entries"
 import { TrialBalance } from "@/components/modules/trial-balance"
 import { ProfitLoss } from "@/components/modules/profit-loss"
 import { BalanceSheet } from "@/components/modules/balance-sheet"
-import { GeneralLedger } from "@/components/modules/general-ledger"
+
 import { AccountSettings } from "@/components/modules/account-settings"
 import { BankAccountManagement } from "@/components/modules/bank-account-management"
 import { BankTransactionsMultiAccountAdvanced } from "@/components/modules/bank-transactions-multi-account-advanced"
@@ -102,6 +104,29 @@ const navigationData = {
       requiredLevel: RoleLevels[UserRoles.VICE_PRESIDENT], // Level 2
     },
   ],
+  management: [
+    {
+      title: "Merchandise Management",
+      url: "#",
+      icon: Box,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+    {
+      title: "Membership Fee Management",
+      url: "#",
+      icon: DollarSign,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+    {
+      title: "Operation Expense Management",
+      url: "#",
+      icon: FileText,
+      requiredLevel: RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT],
+      isCore: false,
+    },
+  ],
 }
 
 export function AccountingDashboard() {
@@ -126,8 +151,7 @@ export function AccountingDashboard() {
         return hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) ? <ProfitLoss /> : <NoPermissionPage />
       case "Balance Sheet":
         return hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) ? <BalanceSheet /> : <NoPermissionPage />
-      case "General Ledger":
-        return hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) ? <GeneralLedger /> : <NoPermissionPage />
+
       case "Account Settings":
         return hasPermission(RoleLevels[UserRoles.VICE_PRESIDENT]) ? <AccountSettings /> : <NoPermissionPage />
       default:

@@ -34,6 +34,27 @@ export async function updateDocument<T>(
   await updateDoc(docRef, data)
 }
 
+/**
+ * 更新交易记录，确保没有 undefined 值
+ */
+export async function updateTransaction(
+  id: string,
+  data: Partial<Omit<Transaction, "id">>,
+): Promise<void> {
+  // 清理数据，确保没有 undefined 值
+  const cleanData = {
+    ...data,
+    description2: data.description2 || "",
+    payer: data.payer || "",
+    projectid: data.projectid || "",
+    projectName: data.projectName || "",
+    category: data.category || "",
+  }
+
+  const docRef = doc(db, "transactions", id)
+  await updateDoc(docRef, cleanData)
+}
+
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   const docRef = doc(db, collectionName, id)
   await deleteDoc(docRef)
@@ -95,6 +116,29 @@ export async function deleteAccount(id: string): Promise<void> {
   } catch (error) {
     // console.error('Error deleting account:', error)
     throw new Error(`Failed to delete account: ${error}`)
+  }
+}
+
+export async function deleteAccounts(accountIds: string[]): Promise<void> {
+  try {
+    console.log('Deleting accounts from Firebase:', accountIds.length)
+    
+    if (accountIds.length === 0) {
+      return
+    }
+    
+    const batch = writeBatch(db)
+    
+    accountIds.forEach(accountId => {
+      const docRef = doc(db, "accounts", accountId)
+      batch.delete(docRef)
+    })
+    
+    await batch.commit()
+    console.log('Accounts deleted successfully')
+  } catch (error) {
+    console.error('Error deleting accounts:', error)
+    throw new Error(`Failed to delete accounts: ${error}`)
   }
 }
 
@@ -1650,14 +1694,22 @@ export async function addTransactionWithBankAccount(
     // 获取下一个序号
     const nextSequenceNumber = await getNextSequenceNumber()
 
-    // 添加交易记录
-    const docRef = await addDoc(collection(db, "transactions"), {
+    // 清理数据，确保没有 undefined 值
+    const cleanTransactionData = {
       ...transactionData,
+      description2: transactionData.description2 || "",
+      payer: transactionData.payer || "",
+      projectid: transactionData.projectid || "",
+      projectName: transactionData.projectName || "",
+      category: transactionData.category || "",
       bankAccountId,
       bankAccountName: bankAccount.name,
       sequenceNumber: nextSequenceNumber,
       createdAt: new Date().toISOString()
-    })
+    }
+
+    // 添加交易记录
+    const docRef = await addDoc(collection(db, "transactions"), cleanTransactionData)
 
     return docRef.id
   } catch (error) {

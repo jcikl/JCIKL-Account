@@ -1,5 +1,5 @@
-import { BankTransactionsVirtual } from "@/components/modules/bank-transactions-virtual"
+import { BankTransactionsMultiAccountAdvanced } from "@/components/modules/bank-transactions-multi-account-advanced"
 
 export default function BankTransactionsVirtualPage() {
-  return <BankTransactionsVirtual />
+  return <BankTransactionsMultiAccountAdvanced />
 } 

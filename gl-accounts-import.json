@@ -1,0 +1,342 @@
+{
+  "accounts": [
+    {
+      "code": "1001",
+      "name": "现金",
+      "type": "Asset",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "主要现金账户",
+      "parent": ""
+    },
+    {
+      "code": "1002",
+      "name": "银行存款",
+      "type": "Asset",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "银行活期存款账户",
+      "parent": ""
+    },
+    {
+      "code": "1101",
+      "name": "其他应收账款",
+      "type": "Asset",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "包括Pre-Ticketing等应收账款",
+      "parent": ""
+    },
+    {
+      "code": "1301",
+      "name": "定期存款",
+      "type": "Asset",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "银行定期存款投资",
+      "parent": ""
+    },
+    {
+      "code": "2001",
+      "name": "应付账款",
+      "type": "Liability",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "供应商应付账款",
+      "parent": ""
+    },
+    {
+      "code": "3001",
+      "name": "实收资本",
+      "type": "Equity",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "股东投入资本",
+      "parent": ""
+    },
+    {
+      "code": "3002",
+      "name": "未分配利润",
+      "type": "Equity",
+      "balance": 0,
+      "financialStatement": "Balance Sheet",
+      "description": "累积未分配利润",
+      "parent": ""
+    },
+    {
+      "code": "4101",
+      "name": "会员费收入-续费",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Fee - Renewal",
+      "parent": ""
+    },
+    {
+      "code": "4102",
+      "name": "会员费收入-附属会员",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Fee - Associated",
+      "parent": ""
+    },
+    {
+      "code": "4103",
+      "name": "会员费收入-新会员",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Fee - New",
+      "parent": ""
+    },
+    {
+      "code": "4104",
+      "name": "会员费收入-新附属会员",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Fee - Associated (New)",
+      "parent": ""
+    },
+    {
+      "code": "4201",
+      "name": "银行利息收入",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Bank Interest",
+      "parent": ""
+    },
+    {
+      "code": "4202",
+      "name": "定期存款利息收入",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Fixed Deposit Interest",
+      "parent": ""
+    },
+    {
+      "code": "4501",
+      "name": "项目收入",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Project accounts 目前现有和以后新增的户口",
+      "parent": ""
+    },
+    {
+      "code": "4901",
+      "name": "其他收入",
+      "type": "Revenue",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Miscellaneous Income",
+      "parent": ""
+    },
+    {
+      "code": "5101",
+      "name": "推广材料费用-夹克",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Promotional Materials / Uniform - Jacket",
+      "parent": ""
+    },
+    {
+      "code": "5102",
+      "name": "推广材料费用-粉红衬衫",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Promotional Materials / Uniform - Pink Shirt",
+      "parent": ""
+    },
+    {
+      "code": "5103",
+      "name": "推广材料费用-JCI徽章",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Promotional Materials / Uniform - JCI Pin",
+      "parent": ""
+    },
+    {
+      "code": "5104",
+      "name": "推广材料费用-JCI旗帜",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Promotional Materials / Uniform - JCI Flag",
+      "parent": ""
+    },
+    {
+      "code": "5105",
+      "name": "推广材料费用-徽章",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Promotional Materials / Uniform - Pin",
+      "parent": ""
+    },
+    {
+      "code": "5201",
+      "name": "会员费用-区域会费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Dues - Area",
+      "parent": ""
+    },
+    {
+      "code": "5202",
+      "name": "会员费用-全国会费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Membership Dues - National",
+      "parent": ""
+    },
+    {
+      "code": "5301",
+      "name": "水电费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Utilities",
+      "parent": ""
+    },
+    {
+      "code": "5302",
+      "name": "水费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Utilities - Water",
+      "parent": ""
+    },
+    {
+      "code": "5303",
+      "name": "税费及许可证费用",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Taxes & Licenses",
+      "parent": ""
+    },
+    {
+      "code": "5304",
+      "name": "建筑/设施管理费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Building/Facility Management Fee",
+      "parent": ""
+    },
+    {
+      "code": "5305",
+      "name": "专业服务费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Professional Fees",
+      "parent": ""
+    },
+    {
+      "code": "5306",
+      "name": "软件订阅费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Software Subscription",
+      "parent": ""
+    },
+    {
+      "code": "5307",
+      "name": "印刷及文具费",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Printing & Stationery",
+      "parent": ""
+    },
+    {
+      "code": "5401",
+      "name": "福利费用-慰问金",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Welfare & Condolence",
+      "parent": ""
+    },
+    {
+      "code": "5402",
+      "name": "福利费用-祝贺金",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Welfare & Congratulatory",
+      "parent": ""
+    },
+    {
+      "code": "5501",
+      "name": "项目支出",
+      "type": "Expense",
+      "balance": 0,
+      "financialStatement": "Income Statement",
+      "description": "Project accounts 支出",
+      "parent": ""
+    }
+  ],
+  "glSettings": {
+    "merchandiseAssetAccountId": "1201",
+    "merchandiseCostAccountId": "5501",
+    "merchandiseIncomeAccountId": "4501",
+    "projectIncomeAccountId": "4501",
+    "projectExpenseAccountId": "5501",
+    "projectBudgetAccountId": "3002",
+    "membershipIncomeAccountId": "4101",
+    "membershipExpenseAccountId": "5201",
+    "operationExpenseAccountId": "5301"
+  },
+  "transactionMappings": {
+    "Pre-Ticketing": "1101",
+    "Membership Fee - Renewal": "4101",
+    "Membership Fee - Associated": "4102",
+    "Membership Fee - New": "4103",
+    "Membership Fee - Associated (New)": "4104",
+    "Promotional Materials / Uniform - Jacket": "5101",
+    "Promotional Materials / Uniform - Pink Shirt": "5102",
+    "Promotional Materials / Uniform - JCI Pin": "5103",
+    "Bank Interest": "4201",
+    "Fixed Deposit": "1301",
+    "Miscellaneous": "4901",
+    "Utilities": "5301",
+    "Taxes & Licenses": "5303",
+    "Building/Facility Management Fee": "5304",
+    "Professional Fees": "5305",
+    "Membership Dues - Area": "5201",
+    "Membership Dues - National": "5202",
+    "Software Subscription": "5306",
+    "Promotional Materials / Uniform - JCI Flag": "5104",
+    "Promotional Materials / Uniform - Pin": "5105",
+    "Utilities - Water": "5302",
+    "Welfare & Condolence": "5401",
+    "Welfare & Congratulatory": "5402",
+    "Printing & Stationery": "5307"
+  },
+  "metadata": {
+    "version": "1.0",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "description": "JCIKL GL账户导入文件 - 包含所有交易记录对应的GL账户",
+    "totalAccounts": 35,
+    "accountTypes": {
+      "Asset": 4,
+      "Liability": 1,
+      "Equity": 2,
+      "Revenue": 8,
+      "Expense": 20
+    }
+  }
+} 
