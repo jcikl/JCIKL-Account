@@ -39,7 +39,7 @@ function calculateChartData(transactions) {
     }
   }
 
-  // 月度趋势数据
+  // 月度趋势数据 - 修正计算逻辑
   const monthlyData = new Map()
   
   transactions.forEach(transaction => {
@@ -51,13 +51,10 @@ function calculateChartData(transactions) {
     }
     
     const data = monthlyData.get(monthKey)
-    if (transaction.type === 'income') {
-      data.income += transaction.amount
-      data.net += transaction.amount
-    } else {
-      data.expense += transaction.amount
-      data.net -= transaction.amount
-    }
+    // 使用正确的字段名称：income 和 expense
+    data.income += transaction.income || 0
+    data.expense += transaction.expense || 0
+    data.net = data.income - data.expense
   })
 
   const monthlyTrend = Array.from(monthlyData.entries())
@@ -72,7 +69,7 @@ function calculateChartData(transactions) {
       }
     })
 
-  // 分类分布数据
+  // 分类分布数据 - 修正计算逻辑
   const categoryData = new Map()
   
   transactions.forEach(transaction => {
@@ -82,7 +79,9 @@ function calculateChartData(transactions) {
     }
     
     const data = categoryData.get(category)
-    data.amount += transaction.amount
+    // 计算净额（收入 - 支出）
+    const netAmount = (transaction.income || 0) - (transaction.expense || 0)
+    data.amount += Math.abs(netAmount)
     data.count += 1
   })
 
@@ -94,17 +93,19 @@ function calculateChartData(transactions) {
     }))
     .sort((a, b) => b.amount - a.amount)
 
-  // 项目统计数据
+  // 项目统计数据 - 修正计算逻辑
   const projectData = new Map()
   
   transactions.forEach(transaction => {
-    const project = transaction.project || '未分配项目'
+    const project = transaction.projectName || transaction.projectid || '未分配项目'
     if (!projectData.has(project)) {
       projectData.set(project, { totalAmount: 0, transactionCount: 0 })
     }
     
     const data = projectData.get(project)
-    data.totalAmount += transaction.amount
+    // 计算净额（收入 - 支出）
+    const netAmount = (transaction.income || 0) - (transaction.expense || 0)
+    data.totalAmount += Math.abs(netAmount)
     data.transactionCount += 1
   })
 
@@ -117,7 +118,7 @@ function calculateChartData(transactions) {
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount)
 
-  // 状态分布数据
+  // 状态分布数据 - 修正计算逻辑
   const statusData = new Map()
   
   transactions.forEach(transaction => {
@@ -128,7 +129,9 @@ function calculateChartData(transactions) {
     
     const data = statusData.get(status)
     data.count += 1
-    data.amount += transaction.amount
+    // 计算净额（收入 - 支出）
+    const netAmount = (transaction.income || 0) - (transaction.expense || 0)
+    data.amount += Math.abs(netAmount)
   })
 
   const statusDistribution = Array.from(statusData.entries())
@@ -139,19 +142,20 @@ function calculateChartData(transactions) {
     }))
     .sort((a, b) => b.count - a.count)
 
-  // 总体统计
-  const totalIncome = transactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0)
-
-  const totalExpense = transactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0)
-
+  // 修正总体统计计算
+  const totalIncome = transactions.reduce((sum, t) => sum + (t.income || 0), 0)
+  const totalExpense = transactions.reduce((sum, t) => sum + (t.expense || 0), 0)
   const netAmount = totalIncome - totalExpense
 
   console.log('✅ 图表数据计算完成')
-  
+  console.log('📈 月度趋势数据:', monthlyTrend.length, '个月')
+  console.log('🏷️ 分类分布数据:', categoryDistribution.length, '个分类')
+  console.log('📊 项目统计数据:', projectStats.length, '个项目')
+  console.log('📋 状态分布数据:', statusDistribution.length, '个状态')
+  console.log('💰 总收入:', totalIncome)
+  console.log('💸 总支出:', totalExpense)
+  console.log('📊 净额:', netAmount)
+
   return {
     monthlyTrend,
     categoryDistribution,

@@ -912,53 +912,18 @@ export function BankTransactionsMultiAccountAdvanced() {
 
 
   return (
-    <div className="space-y-6">
-             <div className="flex items-center justify-between">
-         <div>
-           <h2 className="text-3xl font-bold tracking-tight">高级银行交易管理</h2>
-           <p className="text-muted-foreground">
-             支持分页、排序、批量操作、导入导出、高级筛选和数据可视化
-           </p>
+    <div className="space-y-4 max-w-7xl mx-auto">
+      {/* 页面标题和操作栏 */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+            高级银行交易管理
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            支持分页、排序、批量操作、导入导出、高级筛选和数据可视化
+          </p>
         </div>
-         </div>
-
-      {/* 银行账户标签页 */}
-         {bankAccounts.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">银行账户</h2>
-          </div>
-          <Tabs value={selectedBankAccountId} onValueChange={(value) => {
-                   setSelectedBankAccountId(value)
-                   setSelectedTransactions(new Set())
-                   setIsSelectAll(false)
-          }}>
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                   {bankAccounts.map((account) => (
-                <TabsTrigger 
-                  key={account.id} 
-                  value={account.id!}
-                  className="flex items-center space-x-2"
-                  disabled={!account.isActive}
-                >
-                  <CreditCard className="h-4 w-4" />
-                  <span className="truncate">{account.name}</span>
-                  {!account.isActive && (
-                    <Badge variant="secondary" className="text-xs">已停用</Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-             </div>
-      )}
-
-      {/* 交易管理操作按钮 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">交易管理</h2>
-           </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             导出
@@ -969,9 +934,9 @@ export function BankTransactionsMultiAccountAdvanced() {
               <Upload className="h-4 w-4 mr-2" />
               导入
             </Button>
-         )}
+          )}
         
-        {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
+          {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
             <Button
               onClick={() => {
                 setIsEditMode(false)
@@ -990,103 +955,139 @@ export function BankTransactionsMultiAccountAdvanced() {
             </Button>
           )}
 
-            <Button
-              variant="outline"
-              onClick={() => setShowCharts(!showCharts)}
-            >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              {showCharts ? "隐藏图表" : "显示图表"}
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => setShowCharts(!showCharts)}
+          >
+            <BarChart3 className="h-4 w-4 mr-2" />
+            {showCharts ? "隐藏图表" : "显示图表"}
+          </Button>
+        </div>
       </div>
 
+      {/* 银行账户标签页 */}
+      {bankAccounts.length > 0 && (
+        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-blue-600" />
+              银行账户
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Tabs value={selectedBankAccountId} onValueChange={(value) => {
+              setSelectedBankAccountId(value)
+              setSelectedTransactions(new Set())
+              setIsSelectAll(false)
+            }}>
+              <TabsList className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3 h-auto">
+                {bankAccounts.map((account) => (
+                  <TabsTrigger 
+                    key={account.id} 
+                    value={account.id!}
+                    className="flex items-center space-x-2 h-12 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900 dark:data-[state=active]:bg-blue-900/30 dark:data-[state=active]:text-blue-100"
+                    disabled={!account.isActive}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    <span className="truncate">{account.name}</span>
+                    {!account.isActive && (
+                      <Badge variant="secondary" className="text-xs">已停用</Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-         <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">总交易数</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{transactions.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">总收入</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                ¥{totalIncome.toFixed(2)}
-               </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">总支出</CardTitle>
-              <DollarSign className="h-4 w-4 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                ¥{totalExpense.toFixed(2)}
-             </div>
-           </CardContent>
-         </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">累计余额</CardTitle>
-              <DollarSign className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${cumulativeBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {cumulativeBalance >= 0 ? '+' : ''}¥{Math.abs(cumulativeBalance).toFixed(2)}
-             </div>
-           </CardContent>
-         </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">当前余额</CardTitle>
-              <CreditCard className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                ¥{endingBalance.toFixed(2)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                初始余额:¥{initialBalance.toFixed(2)} • 累计余额:¥{cumulativeBalance.toFixed(2)}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <Card className="shadow-sm border-0 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-900 dark:text-blue-100">总交易数</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{transactions.length}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-0 bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/20 dark:to-green-900/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-900 dark:text-green-100">总收入</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-green-900 dark:text-green-100">
+              ¥{totalIncome.toFixed(2)}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-0 bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/20 dark:to-red-900/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-red-900 dark:text-red-100">总支出</CardTitle>
+            <DollarSign className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-red-900 dark:text-red-100">
+              ¥{totalExpense.toFixed(2)}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-0 bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/20 dark:to-purple-900/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-purple-900 dark:text-purple-100">累计余额</CardTitle>
+            <DollarSign className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className={`text-2xl font-bold ${cumulativeBalance >= 0 ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>
+              {cumulativeBalance >= 0 ? '+' : ''}¥{Math.abs(cumulativeBalance).toFixed(2)}
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-0 bg-gradient-to-br from-indigo-50 to-indigo-100/50 dark:from-indigo-950/20 dark:to-indigo-900/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-indigo-900 dark:text-indigo-100">当前余额</CardTitle>
+            <CreditCard className="h-4 w-4 text-indigo-600" />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
+              ¥{endingBalance.toFixed(2)}
+            </div>
+            <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70 mt-1">
+              初始: ¥{initialBalance.toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* 项目统计部分 */}
       {projects.length > 0 && (
-        <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-          <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-100">
+        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+          <CardHeader className="pb-3 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2 text-purple-900">
-                  <BarChart3 className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-purple-900 dark:text-purple-100">
+                  <BarChart3 className="h-5 w-5 text-purple-600" />
                   项目统计分析
                 </CardTitle>
-                <CardDescription className="text-purple-700">
+                <CardDescription className="text-purple-700 dark:text-purple-300">
                   按项目统计的交易情况和财务表现
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200">
+              <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700">
                 <PieChart className="h-3 w-3 mr-1" />
                 {projects.length} 个项目
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent className="pt-4">
             {/* 项目统计卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
               {(() => {
                 const projectStats = projects.map(project => {
                   const projectTransactions = transactions.filter(t => 
@@ -1107,10 +1108,10 @@ export function BankTransactionsMultiAccountAdvanced() {
                 }).sort((a, b) => b.netAmount - a.netAmount).slice(0, 3)
 
                 return projectStats.map((project, index) => (
-                  <Card key={project.id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3">
+                  <Card key={project.id} className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50 hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
+                    <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-900 truncate">
+                        <CardTitle className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {project.name}
                         </CardTitle>
                         <Badge variant={project.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
@@ -1118,28 +1119,28 @@ export function BankTransactionsMultiAccountAdvanced() {
                         </Badge>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-2">
+                    <CardContent className="pt-0 space-y-1.5">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">总收入</span>
-                        <span className="text-sm font-semibold text-green-600">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">总收入</span>
+                        <span className="text-sm font-semibold text-green-600 dark:text-green-400">
                           ¥{project.totalIncome.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">总支出</span>
-                        <span className="text-sm font-semibold text-red-600">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">总支出</span>
+                        <span className="text-sm font-semibold text-red-600 dark:text-red-400">
                           ¥{project.totalExpense.toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">净额</span>
-                        <span className={`text-sm font-semibold ${project.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">净额</span>
+                        <span className={`text-sm font-semibold ${project.netAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500">交易数</span>
-                        <span className="text-sm font-semibold text-blue-600">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">交易数</span>
+                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
                           {project.transactionCount} 笔
                         </span>
                       </div>
@@ -1150,25 +1151,25 @@ export function BankTransactionsMultiAccountAdvanced() {
             </div>
 
             {/* 项目统计表格 */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">项目详细统计</h3>
-                <Badge variant="outline" className="bg-gray-100">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">项目详细统计</h3>
+                <Badge variant="outline" className="bg-gray-100 dark:bg-gray-800">
                   共 {projects.length} 个项目
                 </Badge>
               </div>
               
-              <div className="rounded-md border border-gray-200 overflow-hidden">
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <Table>
-                  <TableHeader className="bg-gray-50">
+                  <TableHeader className="bg-gray-50 dark:bg-gray-800">
                     <TableRow>
-                      <TableHead className="font-semibold text-gray-900">项目名称</TableHead>
-                      <TableHead className="font-semibold text-gray-900">状态</TableHead>
-                      <TableHead className="font-semibold text-gray-900 text-right">总收入</TableHead>
-                      <TableHead className="font-semibold text-gray-900 text-right">总支出</TableHead>
-                      <TableHead className="font-semibold text-gray-900 text-right">净额</TableHead>
-                      <TableHead className="font-semibold text-gray-900 text-right">交易数</TableHead>
-                      <TableHead className="font-semibold text-gray-900 text-right">平均金额</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100">项目名称</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100">状态</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">总收入</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">总支出</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">净额</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">交易数</TableHead>
+                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">平均金额</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1194,8 +1195,8 @@ export function BankTransactionsMultiAccountAdvanced() {
                       }).sort((a, b) => b.netAmount - a.netAmount)
 
                       return projectStats.map((project) => (
-                        <TableRow key={project.id} className="hover:bg-gray-50">
-                          <TableCell className="font-medium text-gray-900">
+                        <TableRow key={project.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+                          <TableCell className="font-medium text-gray-900 dark:text-gray-100">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                               {project.name}
@@ -1206,21 +1207,21 @@ export function BankTransactionsMultiAccountAdvanced() {
                               {project.status === 'Active' ? '进行中' : project.status === 'Completed' ? '已完成' : '暂停'}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-green-600">
+                          <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
                             ¥{project.totalIncome.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">
+                          <TableCell className="text-right font-semibold text-red-600 dark:text-red-400">
                             ¥{project.totalExpense.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
-                            <span className={project.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}>
+                            <span className={project.netAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600">
+                          <TableCell className="text-right font-semibold text-blue-600 dark:text-blue-400">
                             {project.transactionCount} 笔
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-gray-600">
+                          <TableCell className="text-right font-semibold text-gray-600 dark:text-gray-400">
                             ¥{project.avgAmount.toFixed(2)}
                           </TableCell>
                         </TableRow>
@@ -1235,197 +1236,205 @@ export function BankTransactionsMultiAccountAdvanced() {
       )}
 
        {/* 高级筛选面板 */}
-       <Card>
-        <CardHeader>
-            <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center">
-            <Filter className="h-4 w-4 mr-2" />
-            高级筛选
-          </CardTitle>
+      <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Filter className="h-5 w-5 text-blue-600" />
+              高级筛选
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="h-8"
+            >
+              {showAdvancedFilters ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-2" />
+                  收起筛选
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4 mr-2" />
+                  展开筛选
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        {showAdvancedFilters && (
+          <CardContent className="pt-0">
+            {/* 搜索功能 */}
+            <div className="mb-4">
+              <Label className="text-sm font-medium">搜索交易</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="搜索描述、付款人、项目、分类..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 h-9"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">日期范围 - 开始</Label>
+                <Input
+                  type="date"
+                  value={advancedFilters.dateRange.start}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    dateRange: { ...prev.dateRange, start: e.target.value }
+                  }))}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">日期范围 - 结束</Label>
+                <Input
+                  type="date"
+                  value={advancedFilters.dateRange.end}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    dateRange: { ...prev.dateRange, end: e.target.value }
+                  }))}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">金额范围 - 最小值</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={advancedFilters.amountRange.min}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    amountRange: { ...prev.amountRange, min: e.target.value }
+                  }))}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">金额范围 - 最大值</Label>
+                <Input
+                  type="number"
+                  placeholder="10000"
+                  value={advancedFilters.amountRange.max}
+                  onChange={(e) => setAdvancedFilters(prev => ({
+                    ...prev,
+                    amountRange: { ...prev.amountRange, max: e.target.value }
+                  }))}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">状态筛选</Label>
+                <Select 
+                  value={advancedFilters.status} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部状态</SelectItem>
+                    <SelectItem value="Completed">已完成</SelectItem>
+                    <SelectItem value="Pending">待处理</SelectItem>
+                    <SelectItem value="Draft">草稿</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">项目筛选</Label>
+                <Select 
+                  value={advancedFilters.project} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, project: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部项目</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id!}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">分类筛选</Label>
+                <Select 
+                  value={advancedFilters.category} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部分类</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+              <div className="text-sm text-muted-foreground">
+                找到 <span className="font-semibold text-blue-600">{filteredTransactions.length}</span> 笔交易
+              </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                onClick={() => setAdvancedFilters({
+                  dateRange: { start: "", end: "" },
+                  amountRange: { min: "", max: "" },
+                  status: "all",
+                  project: "all",
+                  category: "all"
+                })}
+                className="h-8"
               >
-                {showAdvancedFilters ? (
-                  <>
-                    <ChevronUp className="h-4 w-4 mr-2" />
-                    收起筛选
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                    展开筛选
-                  </>
-                )}
+                <Filter className="h-4 w-4 mr-2" />
+                清除筛选
               </Button>
             </div>
-        </CardHeader>
-          {showAdvancedFilters && (
-        <CardContent>
-          {/* 搜索功能 */}
-          <div className="mb-4">
-            <Label>搜索交易</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="搜索描述、付款人、项目、分类..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <Label>日期范围 - 开始</Label>
-              <Input
-                type="date"
-                value={advancedFilters.dateRange.start}
-                onChange={(e) => setAdvancedFilters(prev => ({
-                  ...prev,
-                  dateRange: { ...prev.dateRange, start: e.target.value }
-                }))}
-              />
-            </div>
-            <div>
-              <Label>日期范围 - 结束</Label>
-              <Input
-                type="date"
-                value={advancedFilters.dateRange.end}
-                onChange={(e) => setAdvancedFilters(prev => ({
-                  ...prev,
-                  dateRange: { ...prev.dateRange, end: e.target.value }
-                }))}
-              />
-            </div>
-            <div>
-              <Label>金额范围 - 最小值</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={advancedFilters.amountRange.min}
-                onChange={(e) => setAdvancedFilters(prev => ({
-                  ...prev,
-                  amountRange: { ...prev.amountRange, min: e.target.value }
-                }))}
-              />
-            </div>
-            <div>
-              <Label>金额范围 - 最大值</Label>
-              <Input
-                type="number"
-                placeholder="10000"
-                value={advancedFilters.amountRange.max}
-                onChange={(e) => setAdvancedFilters(prev => ({
-                  ...prev,
-                  amountRange: { ...prev.amountRange, max: e.target.value }
-                }))}
-              />
-            </div>
-            <div>
-              <Label>状态筛选</Label>
-              <Select 
-                value={advancedFilters.status} 
-                onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, status: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="Completed">已完成</SelectItem>
-                  <SelectItem value="Pending">待处理</SelectItem>
-                  <SelectItem value="Draft">草稿</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>项目筛选</Label>
-              <Select 
-                value={advancedFilters.project} 
-                onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, project: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部项目</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id!}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>分类筛选</Label>
-              <Select 
-                value={advancedFilters.category} 
-                onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, category: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部分类</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.name}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              找到 {filteredTransactions.length} 笔交易
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => setAdvancedFilters({
-                dateRange: { start: "", end: "" },
-                amountRange: { min: "", max: "" },
-                status: "all",
-                project: "all",
-                category: "all"
-              })}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              清除筛选
-            </Button>
-          </div>
-        </CardContent>
-          )}
+          </CardContent>
+        )}
       </Card>
 
       {/* 批量操作工具栏 */}
       {selectedTransactions.size > 0 && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="pt-4">
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 shadow-sm">
+          <CardContent className="pt-4 pb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium">
-                  已选择 {selectedTransactions.size} 笔交易
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  已选择 <span className="font-bold">{selectedTransactions.size}</span> 笔交易
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedTransactions(new Set())}
+                  className="h-8"
                 >
                   取消选择
                 </Button>
@@ -1435,6 +1444,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                   variant="destructive"
                   size="sm"
                   onClick={handleBatchDelete}
+                  className="h-8"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   批量删除
@@ -1446,13 +1456,13 @@ export function BankTransactionsMultiAccountAdvanced() {
       )}
 
       {/* 交易表格 */}
-      <Card>
-        <CardHeader>
+      <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>交易记录</CardTitle>
-              <CardDescription>
-                共 {pagination.totalItems} 笔交易，当前第 {pagination.currentPage} 页，共 {totalPages} 页
+              <CardTitle className="text-lg font-semibold">交易记录</CardTitle>
+              <CardDescription className="text-sm">
+                共 <span className="font-semibold text-blue-600">{pagination.totalItems}</span> 笔交易，当前第 <span className="font-semibold">{pagination.currentPage}</span> 页，共 <span className="font-semibold">{totalPages}</span> 页
               </CardDescription>
             </div>
             
@@ -1465,7 +1475,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                   currentPage: 1
                 }))}
               >
-                <SelectTrigger className="w-20">
+                <SelectTrigger className="w-20 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1478,134 +1488,140 @@ export function BankTransactionsMultiAccountAdvanced() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-                     {filteredTransactions.length === 0 ? (
-             <div className="text-center py-8">
-               <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-               <h3 className="text-lg font-medium text-gray-900 mb-2">暂无交易记录</h3>
-               <p className="text-gray-600">没有找到符合条件的交易记录</p>
-             </div>
-           ) : (
-             <div className="rounded-md border">
-               <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={isSelectAll}
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer"
-                    onClick={() => handleSort('date')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>日期</span>
-                      {sortConfig.key === 'date' && (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer"
-                    onClick={() => handleSort('description')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>描述</span>
-                      {sortConfig.key === 'description' && (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>描述2</TableHead>
-                  <TableHead className="text-right">支出</TableHead>
-                  <TableHead className="text-right">收入</TableHead>
-                  <TableHead className="text-right">累计余额</TableHead>
-                  <TableHead 
-                    className="cursor-pointer"
-                    onClick={() => handleSort('status')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>状态</span>
-                      {sortConfig.key === 'status' && (
-                        sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead>付款人</TableHead>
-                  <TableHead>项目</TableHead>
-                  <TableHead>分类</TableHead>
-                  {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
-                    <TableHead className="w-20">操作</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {getCurrentPageTransactions().map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
+        <CardContent className="pt-0">
+          {filteredTransactions.length === 0 ? (
+            <div className="text-center py-12">
+              <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">暂无交易记录</h3>
+              <p className="text-gray-600">没有找到符合条件的交易记录</p>
+            </div>
+          ) : (
+            <div className="rounded-md border border-gray-200 overflow-hidden">
+              <Table>
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="w-12">
                       <Checkbox
-                        checked={selectedTransactions.has(transaction.id!)}
-                        onCheckedChange={(checked) => 
-                          handleSelectTransaction(transaction.id!, checked as boolean)
-                        }
+                        checked={isSelectAll}
+                        onCheckedChange={handleSelectAll}
                       />
-                    </TableCell>
-                    <TableCell className="font-medium">{formatDate(transaction.date)}</TableCell>
-                    <TableCell className="max-w-xs truncate">{transaction.description}</TableCell>
-                    <TableCell className="max-w-xs truncate">{transaction.description2}</TableCell>
-                    <TableCell className="text-right">
-                      {transaction.expense ? `¥${parseFloat(transaction.expense.toString()).toFixed(2)}` : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {transaction.income ? `¥${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      <span className={getFilteredRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
-                        ¥{getFilteredRunningBalance(transaction.id!).toFixed(2)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={transaction.status === "Completed" ? "default" : "secondary"}>
-                        {transaction.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{transaction.payer || "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate">{transaction.projectName || "-"}</TableCell>
-                    <TableCell>{transaction.category || "-"}</TableCell>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('date')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>日期</span>
+                        {sortConfig.key === 'date' && (
+                          sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('description')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>描述</span>
+                        {sortConfig.key === 'description' && (
+                          sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead>描述2</TableHead>
+                    <TableHead className="text-right">支出</TableHead>
+                    <TableHead className="text-right">收入</TableHead>
+                    <TableHead className="text-right">累计余额</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>状态</span>
+                        {sortConfig.key === 'status' && (
+                          sortConfig.direction === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead>付款人</TableHead>
+                    <TableHead>项目</TableHead>
+                    <TableHead>分类</TableHead>
                     {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
-                      <TableCell className="w-20">
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditTransaction(transaction)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTransaction(transaction)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      <TableHead className="w-20">操作</TableHead>
                     )}
                   </TableRow>
-                ))}
-                             </TableBody>
-             </Table>
-           </div>
-           )}
+                </TableHeader>
+                <TableBody>
+                  {getCurrentPageTransactions().map((transaction) => (
+                    <TableRow key={transaction.id} className="hover:bg-gray-50/50 transition-colors">
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedTransactions.has(transaction.id!)}
+                          onCheckedChange={(checked) => 
+                            handleSelectTransaction(transaction.id!, checked as boolean)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{formatDate(transaction.date)}</TableCell>
+                      <TableCell className="max-w-xs truncate">{transaction.description}</TableCell>
+                      <TableCell className="max-w-xs truncate">{transaction.description2}</TableCell>
+                      <TableCell className="text-right">
+                        {transaction.expense ? `¥${parseFloat(transaction.expense.toString()).toFixed(2)}` : "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {transaction.income ? `¥${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        <span className={getFilteredRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
+                          ¥{getFilteredRunningBalance(transaction.id!).toFixed(2)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={transaction.status === "Completed" ? "default" : "secondary"} className="text-xs">
+                          {transaction.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{transaction.payer || "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{transaction.projectName || "-"}</TableCell>
+                      <TableCell>{transaction.category || "-"}</TableCell>
+                      {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
+                        <TableCell className="w-20">
+                          <div className="flex items-center space-x-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditTransaction(transaction)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteTransaction(transaction)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-                     {/* 分页控件 */}
-           {totalPages > 1 && filteredTransactions.length > 0 && (
-            <div className="flex items-center justify-between mt-4">
+      {/* 分页控件 */}
+      {totalPages > 1 && filteredTransactions.length > 0 && (
+        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="text-sm text-muted-foreground">
-                显示第 {((pagination.currentPage - 1) * pagination.pageSize) + 1} - {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)} 条，共 {pagination.totalItems} 条
+                显示第 <span className="font-semibold text-blue-600">{((pagination.currentPage - 1) * pagination.pageSize) + 1}</span> - <span className="font-semibold text-blue-600">{Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)}</span> 条，共 <span className="font-semibold text-blue-600">{pagination.totalItems}</span> 条
               </div>
               <div className="flex items-center space-x-2">
                 <Button
@@ -1613,6 +1629,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                   size="sm"
                   onClick={() => handlePageChange(pagination.currentPage - 1)}
                   disabled={pagination.currentPage === 1}
+                  className="h-8"
                 >
                   上一页
                 </Button>
@@ -1625,6 +1642,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                         variant={pagination.currentPage === page ? "default" : "outline"}
                         size="sm"
                         onClick={() => handlePageChange(page)}
+                        className="h-8 w-8 p-0"
                       >
                         {page}
                       </Button>
@@ -1636,112 +1654,157 @@ export function BankTransactionsMultiAccountAdvanced() {
                   size="sm"
                   onClick={() => handlePageChange(pagination.currentPage + 1)}
                   disabled={pagination.currentPage === totalPages}
+                  className="h-8"
                 >
                   下一页
                 </Button>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 数据可视化 */}
       {showCharts && (
-        <BankTransactionsCharts 
-          transactions={transactions}
-          bankAccount={bankAccounts.find(acc => acc.id === selectedBankAccountId) || null}
-        />
+        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
+          <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-blue-900 dark:text-blue-100">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              数据可视化
+            </CardTitle>
+            <CardDescription className="text-blue-700 dark:text-blue-300">
+              交易数据的图表分析和统计展示
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <BankTransactionsCharts 
+              transactions={transactions}
+              bankAccount={bankAccounts.find(acc => acc.id === selectedBankAccountId) || null}
+            />
+          </CardContent>
+        </Card>
       )}
 
 
 
       {/* 编辑交易对话框 */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isEditMode ? "编辑交易" : "新增交易"}</DialogTitle>
-            <DialogDescription>
-              请填写交易详情。
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-4 border-b border-gray-200 dark:border-gray-700">
+            <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+              {isEditMode ? (
+                <>
+                  <Edit className="h-5 w-5 text-blue-600" />
+                  编辑交易
+                </>
+              ) : (
+                <>
+                  <Plus className="h-5 w-5 text-green-600" />
+                  新增交易
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              请填写交易详情信息
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="date">日期</Label>
-              <Input
-                id="date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                required
-              />
+          <form onSubmit={handleFormSubmit} className="space-y-4 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date" className="text-sm font-medium">日期</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  required
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status" className="text-sm font-medium">状态</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value: "Completed" | "Pending" | "Draft") => setFormData(prev => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Completed">已完成</SelectItem>
+                    <SelectItem value="Pending">待处理</SelectItem>
+                    <SelectItem value="Draft">草稿</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="description">描述</Label>
+            
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-sm font-medium">描述</Label>
               <Input
                 id="description"
                 type="text"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 required
+                className="h-9"
+                placeholder="请输入交易描述"
               />
             </div>
-            <div>
-              <Label htmlFor="description2">描述2</Label>
+            
+            <div className="space-y-2">
+              <Label htmlFor="description2" className="text-sm font-medium">描述2</Label>
               <Input
                 id="description2"
                 type="text"
                 value={formData.description2}
                 onChange={(e) => setFormData(prev => ({ ...prev, description2: e.target.value }))}
+                className="h-9"
+                placeholder="请输入额外描述（可选）"
               />
             </div>
+            
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="expense">支出</Label>
+              <div className="space-y-2">
+                <Label htmlFor="expense" className="text-sm font-medium">支出</Label>
                 <Input
                   id="expense"
                   type="number"
                   value={formData.expense}
                   onChange={(e) => setFormData(prev => ({ ...prev, expense: e.target.value }))}
+                  className="h-9"
+                  placeholder="0.00"
+                  step="0.01"
                 />
               </div>
-              <div>
-                <Label htmlFor="income">收入</Label>
+              <div className="space-y-2">
+                <Label htmlFor="income" className="text-sm font-medium">收入</Label>
                 <Input
                   id="income"
                   type="number"
                   value={formData.income}
                   onChange={(e) => setFormData(prev => ({ ...prev, income: e.target.value }))}
+                  className="h-9"
+                  placeholder="0.00"
+                  step="0.01"
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="status">状态</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "Completed" | "Pending" | "Draft") => setFormData(prev => ({ ...prev, status: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Completed">已完成</SelectItem>
-                  <SelectItem value="Pending">待处理</SelectItem>
-                  <SelectItem value="Draft">草稿</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="payer">付款人</Label>
+            
+            <div className="space-y-2">
+              <Label htmlFor="payer" className="text-sm font-medium">付款人</Label>
               <Input
                 id="payer"
                 type="text"
                 value={formData.payer}
                 onChange={(e) => setFormData(prev => ({ ...prev, payer: e.target.value }))}
+                className="h-9"
+                placeholder="请输入付款人姓名"
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="project-year">项目年份</Label>
+              <div className="space-y-2">
+                <Label htmlFor="project-year" className="text-sm font-medium">项目年份</Label>
                 <Select
                   value={formData.projectid ? (() => {
                     const parts = formData.projectid.split('_')
@@ -1756,7 +1819,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                     }))
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue placeholder="选择项目年份" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1769,8 +1832,8 @@ export function BankTransactionsMultiAccountAdvanced() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="projectid">项目户口</Label>
+              <div className="space-y-2">
+                <Label htmlFor="projectid" className="text-sm font-medium">项目户口</Label>
                 <Select
                   value={formData.projectid}
                   onValueChange={(value) => {
@@ -1793,7 +1856,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue placeholder="选择项目户口" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1857,13 +1920,13 @@ export function BankTransactionsMultiAccountAdvanced() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="category">收支类型</Label>
+              <div className="space-y-2">
+                <Label htmlFor="category" className="text-sm font-medium">收支类型</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue placeholder="选择收支类型" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1879,28 +1942,30 @@ export function BankTransactionsMultiAccountAdvanced() {
                 </Select>
               </div>
             </div>
-            <div>
-              <Label htmlFor="bankAccountId">银行账户</Label>
-              <Select
-                value={selectedBankAccountId}
-                onValueChange={(value) => setSelectedBankAccountId(value)}
-                disabled
+            
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsFormOpen(false)}
+                className="h-9"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {bankAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id!}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                取消
+              </Button>
+              <Button type="submit" className="h-9">
+                {isEditMode ? (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    保存修改
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    添加交易
+                  </>
+                )}
+              </Button>
             </div>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "保存中..." : isEditMode ? "更新交易" : "保存交易"}
-            </Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -1917,16 +1982,30 @@ export function BankTransactionsMultiAccountAdvanced() {
 
       {/* 删除确认对话框 */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>确定要删除此交易吗？</AlertDialogTitle>
-            <AlertDialogDescription>
-              此操作无法撤销。
+            <AlertDialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Trash2 className="h-5 w-5 text-red-600" />
+              确定要删除此交易吗？
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              此操作无法撤销，删除后将无法恢复。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>删除</AlertDialogAction>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel 
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="h-9"
+            >
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              className="h-9 bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              删除
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
