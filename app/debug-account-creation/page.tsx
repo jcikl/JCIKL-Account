@@ -9,6 +9,12 @@ export default function DebugAccountCreationPage() {
   const [accounts, setAccounts] = React.useState<Account[]>([])
   const [showForm, setShowForm] = React.useState(false)
   const [debugLog, setDebugLog] = React.useState<string[]>([])
+  const [isClient, setIsClient] = React.useState(false)
+
+  // 检测客户端渲染
+  React.useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const addDebugLog = (message: string) => {
     setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`])
@@ -77,6 +83,20 @@ export default function DebugAccountCreationPage() {
 
   const clearDebugLog = () => {
     setDebugLog([])
+  }
+
+  // 在SSR期间显示加载状态
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold">账户创建调试页面</h1>
+            <p className="text-muted-foreground mt-2">正在加载...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

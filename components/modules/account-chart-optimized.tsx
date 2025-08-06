@@ -225,6 +225,9 @@ export function AccountChartOptimized({
     error: accountsError,
     refetch: refetchAccounts 
   } = useOptimizedAccounts()
+
+  // 检查是否在服务器端渲染或静态生成
+  const isSSR = typeof window === 'undefined'
   
   const [saving, setSaving] = React.useState(false)
   const [filters, setFilters] = React.useState<AccountFilters>({
@@ -245,16 +248,20 @@ export function AccountChartOptimized({
   const [showBatchDeleteDialog, setShowBatchDeleteDialog] = React.useState(false)
 
   // 使用传入的账户数据或从Firebase加载
-  const displayAccounts = propAccounts || accounts || []
+  // 在SSR期间，只使用传入的账户数据，避免访问Firebase
+  const displayAccounts = propAccounts || (isSSR ? [] : (accounts || []))
 
   // 获取账户类型统计
   const accountTypes = React.useMemo(() => {
+    if (!displayAccounts || displayAccounts.length === 0) return []
     const types = new Set(displayAccounts.map(account => account.type))
     return Array.from(types)
   }, [displayAccounts])
 
   // 构建账户层次结构
   const buildAccountHierarchy = React.useCallback((accounts: Account[]) => {
+    if (!accounts || accounts.length === 0) return []
+    
     const accountMap = new Map<string, Account>()
     const rootAccounts: Account[] = []
     const childAccounts: Account[] = []
@@ -292,6 +299,8 @@ export function AccountChartOptimized({
 
   // 优化的过滤和排序逻辑
   const filteredAndSortedAccounts = React.useMemo(() => {
+    if (!displayAccounts || displayAccounts.length === 0) return []
+    
     let filtered = displayAccounts
 
     // 搜索过滤
@@ -365,16 +374,29 @@ export function AccountChartOptimized({
 
   // 优化的统计数据计算
   const stats = React.useMemo(() => {
+    if (!displayAccounts || displayAccounts.length === 0) {
+      return {
+        totalAccounts: 0,
+        totalBalance: 0,
+        positiveBalance: 0,
+        negativeBalance: 0,
+        zeroBalance: 0,
+        averageBalance: 0
+      }
+    }
+    
     const totalAccounts = displayAccounts.length
     const totalBalance = displayAccounts.reduce((sum, account) => sum + account.balance, 0)
     const positiveBalance = displayAccounts.filter(account => account.balance > 0).length
     const negativeBalance = displayAccounts.filter(account => account.balance < 0).length
+    const zeroBalance = displayAccounts.filter(account => account.balance === 0).length
 
     return {
       totalAccounts,
       totalBalance,
       positiveBalance,
       negativeBalance,
+      zeroBalance,
       averageBalance: totalAccounts > 0 ? totalBalance / totalAccounts : 0
     }
   }, [displayAccounts])
@@ -530,7 +552,10 @@ export function AccountChartOptimized({
       } else {
         // 添加新账户
         console.log('创建新账户')
-        await addAccount(accountData)
+        await addAccount({
+          ...accountData,
+          balance: 0
+        })
         
         // 调用 onAccountAdd 回调
         if (onAccountAdd) {

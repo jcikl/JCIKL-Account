@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
 import { 
   getTransactions, 
+  getTransactionsByProject,
   getProjects,
   getProjectStats,
   updateDocument,
@@ -352,8 +353,8 @@ export function ProjectDetailsDialogOptimized({
     
     setLoading(true)
     try {
-      const projectTransactions = await getTransactions({ projectid: project.projectid })
-      const transactionsWithEditState = projectTransactions.map(t => ({ ...t, isEditing: false }))
+      const projectTransactions = await getTransactionsByProject(project.projectid)
+      const transactionsWithEditState = projectTransactions.map((t: Transaction) => ({ ...t, isEditing: false }))
       setTransactions(transactionsWithEditState)
       setFilteredTransactions(transactionsWithEditState)
     } catch (error) {

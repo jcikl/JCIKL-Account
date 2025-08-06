@@ -388,8 +388,11 @@ export function useCachedData<T>(
   }, [key, preload, priority])
 
   // 初始加载 - 只在 key 或 ttl 变化时重新获取
+  // 在SSR期间不执行数据获取
   React.useEffect(() => {
-    fetchData()
+    if (typeof window !== 'undefined') {
+      fetchData()
+    }
   }, [fetchData])
 
   return { data, loading, error, refetch: fetchData }
