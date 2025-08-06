@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Calendar, DollarSign, TrendingDown, TrendingUp, Eye, Filter, Loader2, Download, FileSpreadsheet } from "lucide-react"
+import { Calendar, DollarSign, TrendingDown, TrendingUp, Eye, Filter, Loader2, Download, FileSpreadsheet, Edit, Save, X, CheckSquare, Square, Trash2, Edit3 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,10 +15,12 @@ import { Progress } from "@/components/ui/progress"
 import { 
   getTransactions, 
   getProjects,
-  getProjectStats
+  getProjectStats,
+  updateDocument,
+  getCategories
 } from "@/lib/firebase-utils"
 import { useAuth } from "@/components/auth/auth-context"
-import { RoleLevels, UserRoles, BODCategories, type Project, type Transaction } from "@/lib/data"
+import { RoleLevels, UserRoles, BODCategories, type Project, type Transaction, type Category } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
 
 interface ProjectDetailsDialogProps {
@@ -34,6 +36,11 @@ interface ProjectTransactionStats {
   transactionCount: number
   incomeByCategory: Record<string, number>
   expenseByCategory: Record<string, number>
+}
+
+interface EditingTransaction extends Transaction {
+  isEditing?: boolean
+  originalData?: Partial<Transaction>
 }
 
 // 日期格式化函数
@@ -101,32 +108,6 @@ const StatCard = React.memo(({
   </Card>
 ))
 
-// 优化的交易行组件
-const TransactionRow = React.memo(({ 
-  transaction 
-}: { 
-  transaction: Transaction 
-}) => (
-  <TableRow>
-    <TableCell className="font-medium">
-      {formatTransactionDate(transaction.date)}
-    </TableCell>
-    <TableCell>{transaction.description}</TableCell>
-    <TableCell>
-      <Badge variant="outline">{transaction.category}</Badge>
-    </TableCell>
-    <TableCell className="text-right text-green-600">
-      ${transaction.income.toFixed(2)}
-    </TableCell>
-    <TableCell className="text-right text-red-600">
-      ${transaction.expense.toFixed(2)}
-    </TableCell>
-    <TableCell className="text-right font-medium">
-      {formatNetAmount(transaction)}
-    </TableCell>
-  </TableRow>
-))
-
 // 优化的分类统计项组件
 const CategoryStatItem = React.memo(({ 
   category, 
@@ -158,6 +139,166 @@ const FilterOption = React.memo(({
   </SelectItem>
 ))
 
+// 内联编辑的交易行组件
+const EditableTransactionRow = React.memo(({ 
+  transaction,
+  categories,
+  onEdit,
+  onSave,
+  onCancel,
+  isSelected,
+  onSelect,
+  isBatchMode
+}: { 
+  transaction: EditingTransaction
+  categories: Category[]
+  onEdit: (transaction: Transaction) => void
+  onSave: (transaction: Transaction) => Promise<void>
+  onCancel: (transaction: Transaction) => void
+  isSelected: boolean
+  onSelect: (transactionId: string | undefined, selected: boolean) => void
+  isBatchMode: boolean
+}) => {
+  const [editData, setEditData] = React.useState<Partial<Transaction>>({
+    description: transaction.description,
+    category: transaction.category,
+    income: transaction.income,
+    expense: transaction.expense
+  })
+  const [isSaving, setIsSaving] = React.useState(false)
+
+  const handleSave = async () => {
+    if (!transaction.id) return
+    
+    setIsSaving(true)
+    try {
+      await onSave({
+        ...transaction,
+        ...editData
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setEditData({
+      description: transaction.description,
+      category: transaction.category,
+      income: transaction.income,
+      expense: transaction.expense
+    })
+    onCancel(transaction)
+  }
+
+
+
+  if (transaction.isEditing) {
+    return (
+      <TableRow className="bg-muted/50">
+        <TableCell>
+          <Input
+            type="date"
+            value={typeof transaction.date === 'string' ? transaction.date : ''}
+            onChange={(e) => setEditData(prev => ({ ...prev, date: e.target.value }))}
+            className="w-32"
+          />
+        </TableCell>
+        <TableCell>
+          <Input
+            value={editData.description || ''}
+            onChange={(e) => setEditData(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="交易描述"
+          />
+        </TableCell>
+        <TableCell>
+          <Select value={editData.category || ''} onValueChange={(value) => setEditData(prev => ({ ...prev, category: value }))}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((category) => (
+                <SelectItem key={category.code} value={category.name}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+        <TableCell>
+          <Input
+            type="number"
+            step="0.01"
+            value={editData.income || 0}
+            onChange={(e) => setEditData(prev => ({ ...prev, income: parseFloat(e.target.value) || 0 }))}
+            className="text-right"
+          />
+        </TableCell>
+        <TableCell>
+          <Input
+            type="number"
+            step="0.01"
+            value={editData.expense || 0}
+            onChange={(e) => setEditData(prev => ({ ...prev, expense: parseFloat(e.target.value) || 0 }))}
+            className="text-right"
+          />
+        </TableCell>
+        <TableCell className="text-right font-medium">
+          ${((editData.income || 0) - (editData.expense || 0)).toFixed(2)}
+        </TableCell>
+        <TableCell>
+          <div className="flex gap-1">
+            <Button size="sm" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCancel}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    )
+  }
+
+  return (
+    <TableRow className={isSelected ? "bg-muted/30" : ""}>
+      <TableCell>
+        {isBatchMode && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onSelect(transaction.id, !isSelected)}
+            className="p-0 h-4 w-4 mr-2"
+          >
+            {isSelected ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3" />}
+          </Button>
+        )}
+        {formatTransactionDate(transaction.date)}
+      </TableCell>
+      <TableCell className="font-medium">{transaction.description}</TableCell>
+      <TableCell>
+        <Badge variant="outline">{transaction.category}</Badge>
+      </TableCell>
+      <TableCell className="text-right text-green-600">
+        ${transaction.income.toFixed(2)}
+      </TableCell>
+      <TableCell className="text-right text-red-600">
+        ${transaction.expense.toFixed(2)}
+      </TableCell>
+      <TableCell className="text-right font-medium">
+        {formatNetAmount(transaction)}
+      </TableCell>
+              <TableCell>
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" onClick={() => onEdit(transaction)}>
+              <Edit3 className="h-3 w-3" />
+            </Button>
+          </div>
+        </TableCell>
+    </TableRow>
+  )
+})
+
 export function ProjectDetailsDialogOptimized({
   open,
   onOpenChange,
@@ -166,9 +307,10 @@ export function ProjectDetailsDialogOptimized({
   const { currentUser, hasPermission } = useAuth()
   const { toast } = useToast()
   
-  const [transactions, setTransactions] = React.useState<Transaction[]>([])
-  const [filteredTransactions, setFilteredTransactions] = React.useState<Transaction[]>([])
+  const [transactions, setTransactions] = React.useState<EditingTransaction[]>([])
+  const [filteredTransactions, setFilteredTransactions] = React.useState<EditingTransaction[]>([])
   const [loading, setLoading] = React.useState(false)
+  const [categories, setCategories] = React.useState<Category[]>([])
   const [stats, setStats] = React.useState<ProjectTransactionStats>({
     totalIncome: 0,
     totalExpense: 0,
@@ -177,6 +319,13 @@ export function ProjectDetailsDialogOptimized({
     incomeByCategory: {},
     expenseByCategory: {}
   })
+  
+  // 编辑状态
+  const [editingTransactionId, setEditingTransactionId] = React.useState<string | null>(null)
+  const [isBatchMode, setIsBatchMode] = React.useState(false)
+  const [selectedTransactions, setSelectedTransactions] = React.useState<Set<string>>(new Set())
+  const [batchEditData, setBatchEditData] = React.useState<Partial<Transaction>>({})
+  const [isBatchEditing, setIsBatchEditing] = React.useState(false)
   
   // 优化的筛选状态
   const [filters, setFilters] = React.useState({
@@ -187,6 +336,16 @@ export function ProjectDetailsDialogOptimized({
     amountMax: ""
   })
 
+  // 加载分类数据
+  const loadCategories = React.useCallback(async () => {
+    try {
+      const categoriesData = await getCategories()
+      setCategories(categoriesData)
+    } catch (error) {
+      console.error('加载分类数据失败:', error)
+    }
+  }, [])
+
   // 优化的数据加载
   const loadProjectData = React.useCallback(async () => {
     if (!project) return
@@ -194,8 +353,9 @@ export function ProjectDetailsDialogOptimized({
     setLoading(true)
     try {
       const projectTransactions = await getTransactions({ projectid: project.projectid })
-      setTransactions(projectTransactions)
-      setFilteredTransactions(projectTransactions)
+      const transactionsWithEditState = projectTransactions.map(t => ({ ...t, isEditing: false }))
+      setTransactions(transactionsWithEditState)
+      setFilteredTransactions(transactionsWithEditState)
     } catch (error) {
       console.error('加载项目数据失败:', error)
       toast({
@@ -209,7 +369,7 @@ export function ProjectDetailsDialogOptimized({
   }, [project, toast])
 
   // 优化的交易统计计算
-  const calculateTransactionStats = React.useCallback((transactions: Transaction[]) => {
+  const calculateTransactionStats = React.useCallback((transactions: EditingTransaction[]) => {
     const stats: ProjectTransactionStats = {
       totalIncome: 0,
       totalExpense: 0,
@@ -224,13 +384,13 @@ export function ProjectDetailsDialogOptimized({
       stats.totalExpense += transaction.expense
       
       // 按分类统计收入
-      if (transaction.income > 0) {
+      if (transaction.income > 0 && transaction.category) {
         stats.incomeByCategory[transaction.category] = 
           (stats.incomeByCategory[transaction.category] || 0) + transaction.income
       }
       
       // 按分类统计支出
-      if (transaction.expense > 0) {
+      if (transaction.expense > 0 && transaction.category) {
         stats.expenseByCategory[transaction.category] = 
           (stats.expenseByCategory[transaction.category] || 0) + transaction.expense
       }
@@ -360,8 +520,152 @@ export function ProjectDetailsDialogOptimized({
         amountMin: "",
         amountMax: ""
       })
+      setEditingTransactionId(null)
+      setIsBatchMode(false)
+      setSelectedTransactions(new Set())
+      setBatchEditData({})
     }, 100)
   }, [onOpenChange])
+
+  // 编辑交易记录
+  const handleEditTransaction = React.useCallback((transaction: Transaction) => {
+    setEditingTransactionId(transaction.id || null)
+    setTransactions(prev => prev.map(t => 
+      t.id === transaction.id 
+        ? { ...t, isEditing: true, originalData: { ...t } }
+        : { ...t, isEditing: false }
+    ))
+    setFilteredTransactions(prev => prev.map(t => 
+      t.id === transaction.id 
+        ? { ...t, isEditing: true, originalData: { ...t } }
+        : { ...t, isEditing: false }
+    ))
+  }, [])
+
+  // 保存交易记录
+  const handleSaveTransaction = React.useCallback(async (updatedTransaction: Transaction) => {
+    if (!updatedTransaction.id) return
+
+    try {
+      await updateDocument('transactions', updatedTransaction.id, {
+        description: updatedTransaction.description,
+        category: updatedTransaction.category,
+        income: updatedTransaction.income,
+        expense: updatedTransaction.expense,
+        date: updatedTransaction.date
+      })
+
+      setTransactions(prev => prev.map(t => 
+        t.id === updatedTransaction.id 
+          ? { ...updatedTransaction, isEditing: false }
+          : t
+      ))
+      setFilteredTransactions(prev => prev.map(t => 
+        t.id === updatedTransaction.id 
+          ? { ...updatedTransaction, isEditing: false }
+          : t
+      ))
+      setEditingTransactionId(null)
+
+      toast({
+        title: "更新成功",
+        description: "交易记录已更新",
+      })
+    } catch (error) {
+      console.error('更新交易记录失败:', error)
+      toast({
+        title: "更新失败",
+        description: "无法更新交易记录",
+        variant: "destructive",
+      })
+    }
+  }, [toast])
+
+  // 取消编辑
+  const handleCancelEdit = React.useCallback((transaction: Transaction) => {
+    setEditingTransactionId(null)
+    setTransactions(prev => prev.map(t => 
+      t.id === transaction.id 
+        ? { ...t, isEditing: false }
+        : t
+    ))
+    setFilteredTransactions(prev => prev.map(t => 
+      t.id === transaction.id 
+        ? { ...t, isEditing: false }
+        : t
+    ))
+  }, [])
+
+
+
+  // 批量选择
+  const handleSelectTransaction = React.useCallback((transactionId: string | undefined, selected: boolean) => {
+    if (!transactionId) return
+    setSelectedTransactions(prev => {
+      const newSet = new Set(prev)
+      if (selected) {
+        newSet.add(transactionId)
+      } else {
+        newSet.delete(transactionId)
+      }
+      return newSet
+    })
+  }, [])
+
+  // 全选/取消全选
+  const handleSelectAll = React.useCallback((selected: boolean) => {
+    if (selected) {
+      const allIds = new Set(filteredTransactions.map(t => t.id).filter((id): id is string => Boolean(id)))
+      setSelectedTransactions(allIds)
+    } else {
+      setSelectedTransactions(new Set())
+    }
+  }, [filteredTransactions])
+
+  // 批量编辑
+  const handleBatchEdit = React.useCallback(async () => {
+    if (selectedTransactions.size === 0) return
+
+    setIsBatchEditing(true)
+    try {
+      const updatePromises = Array.from(selectedTransactions).map(async (transactionId) => {
+        await updateDocument('transactions', transactionId, batchEditData)
+      })
+
+      await Promise.all(updatePromises)
+
+      // 更新本地状态
+      setTransactions(prev => prev.map(t => 
+        t.id && selectedTransactions.has(t.id)
+          ? { ...t, ...batchEditData }
+          : t
+      ))
+      setFilteredTransactions(prev => prev.map(t => 
+        t.id && selectedTransactions.has(t.id)
+          ? { ...t, ...batchEditData }
+          : t
+      ))
+
+      // 重置批量编辑状态
+      setSelectedTransactions(new Set())
+      setBatchEditData({})
+      setIsBatchMode(false)
+
+      toast({
+        title: "批量更新成功",
+        description: `已更新 ${selectedTransactions.size} 条交易记录`,
+      })
+    } catch (error) {
+      console.error('批量更新失败:', error)
+      toast({
+        title: "批量更新失败",
+        description: "无法批量更新交易记录",
+        variant: "destructive",
+      })
+    } finally {
+      setIsBatchEditing(false)
+    }
+  }, [selectedTransactions, batchEditData, toast])
 
   // 优化的统计数据
   const currentStats = React.useMemo(() => 
@@ -371,7 +675,7 @@ export function ProjectDetailsDialogOptimized({
 
   // 优化的分类选项
   const categoryOptions = React.useMemo(() => {
-    const categories = [...new Set(transactions.map(t => t.category))]
+    const categories = [...new Set(transactions.map(t => t.category).filter((cat): cat is string => Boolean(cat)))]
     return [
       { value: "all", label: "所有分类" },
       ...categories.map(cat => ({ value: cat, label: cat }))
@@ -404,8 +708,9 @@ export function ProjectDetailsDialogOptimized({
   React.useEffect(() => {
     if (open && project) {
       loadProjectData()
+      loadCategories()
     }
-  }, [open, project, loadProjectData])
+  }, [open, project, loadProjectData, loadCategories])
 
   // 应用筛选
   React.useEffect(() => {
@@ -635,30 +940,156 @@ export function ProjectDetailsDialogOptimized({
           {/* 交易记录表格 */}
           <Card>
             <CardHeader>
-              <CardTitle>交易记录 ({filteredTransactions.length})</CardTitle>
-              {loading && (
+              <div className="flex items-center justify-between">
+                <CardTitle>交易记录 ({filteredTransactions.length})</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">加载中...</span>
+                  {loading && (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">加载中...</span>
+                    </div>
+                  )}
+                  <Button
+                    variant={isBatchMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setIsBatchMode(!isBatchMode)
+                      if (isBatchMode) {
+                        setSelectedTransactions(new Set())
+                        setBatchEditData({})
+                      }
+                    }}
+                  >
+                    {isBatchMode ? "退出批量模式" : "批量编辑"}
+                  </Button>
                 </div>
-              )}
+              </div>
             </CardHeader>
             <CardContent>
+              {/* 批量编辑面板 */}
+              {isBatchMode && selectedTransactions.size > 0 && (
+                <div className="mb-4 p-4 border rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">已选择 {selectedTransactions.size} 条记录</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSelectAll(false)}
+                      >
+                        取消全选
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label>分类</Label>
+                      <Select 
+                        value={batchEditData.category || ''} 
+                        onValueChange={(value) => setBatchEditData(prev => ({ ...prev, category: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择分类" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.code} value={category.name}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>收入</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="保持原值"
+                        value={batchEditData.income?.toString() || ''}
+                        onChange={(e) => setBatchEditData(prev => ({ 
+                          ...prev, 
+                          income: e.target.value ? parseFloat(e.target.value) : undefined 
+                        }))}
+                      />
+                    </div>
+                    <div>
+                      <Label>支出</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="保持原值"
+                        value={batchEditData.expense?.toString() || ''}
+                        onChange={(e) => setBatchEditData(prev => ({ 
+                          ...prev, 
+                          expense: e.target.value ? parseFloat(e.target.value) : undefined 
+                        }))}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button 
+                        onClick={handleBatchEdit} 
+                        disabled={isBatchEditing || Object.keys(batchEditData).length === 0}
+                        className="w-full"
+                      >
+                        {isBatchEditing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            更新中...
+                          </>
+                        ) : (
+                          <>
+                            <Edit className="h-4 w-4 mr-2" />
+                            批量更新
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {filteredTransactions.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {isBatchMode && (
+                        <TableHead className="w-12">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSelectAll(selectedTransactions.size !== filteredTransactions.length)}
+                            className="p-0 h-4 w-4"
+                          >
+                            {selectedTransactions.size === filteredTransactions.length ? 
+                              <CheckSquare className="h-3 w-3" /> : 
+                              <Square className="h-3 w-3" />
+                            }
+                          </Button>
+                        </TableHead>
+                      )}
                       <TableHead>日期</TableHead>
                       <TableHead>描述</TableHead>
                       <TableHead>分类</TableHead>
                       <TableHead className="text-right">收入</TableHead>
                       <TableHead className="text-right">支出</TableHead>
                       <TableHead className="text-right">净额</TableHead>
+                      <TableHead className="w-24">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredTransactions.map((transaction, index) => (
-                      <TransactionRow key={index} transaction={transaction} />
+                      <EditableTransactionRow
+                        key={transaction.id || `transaction-${index}-${transaction.date}-${transaction.description}`}
+                        transaction={transaction}
+                        categories={categories}
+                        onEdit={handleEditTransaction}
+                        onSave={handleSaveTransaction}
+                        onCancel={handleCancelEdit}
+                        isSelected={transaction.id ? selectedTransactions.has(transaction.id) : false}
+                        onSelect={handleSelectTransaction}
+                        isBatchMode={isBatchMode}
+                      />
                     ))}
                   </TableBody>
                 </Table>

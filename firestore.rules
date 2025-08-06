@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 允许所有用户读取和写入（开发环境）
+    // 在生产环境中应该设置更严格的规则
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

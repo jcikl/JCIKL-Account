@@ -53,7 +53,9 @@ const AccountRow = React.memo(({
   onDelete, 
   onView,
   isSelected,
-  hasPermission
+  hasPermission,
+  level = 0,
+  hasChildren = false
 }: { 
   account: Account
   onSelect: (accountId: string, checked: boolean) => void
@@ -62,6 +64,8 @@ const AccountRow = React.memo(({
   onView: (account: Account) => void
   isSelected: boolean
   hasPermission: boolean
+  level?: number
+  hasChildren?: boolean
 }) => {
   const getAccountTypeColor = React.useCallback((type: string) => {
     switch (type) {
@@ -88,12 +92,48 @@ const AccountRow = React.memo(({
           onCheckedChange={(checked) => onSelect(account.id!, checked as boolean)}
         />
       </TableCell>
-      <TableCell className="font-medium">{account.code}</TableCell>
-      <TableCell>{account.name}</TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center">
+          <div 
+            className="flex items-center"
+            style={{ marginLeft: `${level * 20}px` }}
+          >
+            {level > 0 && (
+              <div className="w-4 h-px bg-gray-300 mr-2" />
+            )}
+            {hasChildren && (
+              <div className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
+            )}
+            {account.code}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center">
+          <div 
+            className="flex items-center"
+            style={{ marginLeft: `${level * 20}px` }}
+          >
+            {level > 0 && (
+              <div className="w-4 h-px bg-gray-300 mr-2" />
+            )}
+            {account.name}
+          </div>
+        </div>
+      </TableCell>
       <TableCell>
         <Badge className={getAccountTypeColor(account.type)}>
           {account.type}
         </Badge>
+      </TableCell>
+      <TableCell>
+        {account.parent ? (
+          <span className="text-sm text-muted-foreground">
+            {account.parent}
+          </span>
+        ) : (
+          <span className="text-sm text-gray-400">-</span>
+        )}
       </TableCell>
       <TableCell className={`text-right font-mono ${getBalanceStatus(account.balance)}`}>
         ${account.balance.toLocaleString()}
@@ -213,6 +253,43 @@ export function AccountChartOptimized({
     return Array.from(types)
   }, [displayAccounts])
 
+  // 构建账户层次结构
+  const buildAccountHierarchy = React.useCallback((accounts: Account[]) => {
+    const accountMap = new Map<string, Account>()
+    const rootAccounts: Account[] = []
+    const childAccounts: Account[] = []
+
+    // 创建账户映射
+    accounts.forEach(account => {
+      accountMap.set(account.id!, account)
+    })
+
+    // 分离根账户和子账户
+    accounts.forEach(account => {
+      if (account.parent) {
+        childAccounts.push(account)
+      } else {
+        rootAccounts.push(account)
+      }
+    })
+
+    // 递归构建层次结构
+    const buildHierarchy = (parentAccount: Account, level: number = 0): (Account & { level: number; hasChildren: boolean })[] => {
+      const children = childAccounts.filter(account => account.parent === parentAccount.code)
+      const result: (Account & { level: number; hasChildren: boolean })[] = [
+        { ...parentAccount, level, hasChildren: children.length > 0 }
+      ]
+
+      children.forEach(child => {
+        result.push(...buildHierarchy(child, level + 1))
+      })
+
+      return result
+    }
+
+    return rootAccounts.flatMap(account => buildHierarchy(account))
+  }, [])
+
   // 优化的过滤和排序逻辑
   const filteredAndSortedAccounts = React.useMemo(() => {
     let filtered = displayAccounts
@@ -247,8 +324,11 @@ export function AccountChartOptimized({
       })
     }
 
+    // 构建层次结构
+    const hierarchicalAccounts = buildAccountHierarchy(filtered)
+
     // 排序
-    filtered.sort((a, b) => {
+    hierarchicalAccounts.sort((a, b) => {
       let aValue: any, bValue: any
       
       switch (sortBy) {
@@ -280,8 +360,8 @@ export function AccountChartOptimized({
       }
     })
 
-    return filtered
-  }, [displayAccounts, filters, sortBy, sortOrder])
+    return hierarchicalAccounts
+  }, [displayAccounts, filters, sortBy, sortOrder, buildAccountHierarchy])
 
   // 优化的统计数据计算
   const stats = React.useMemo(() => {
@@ -310,7 +390,15 @@ export function AccountChartOptimized({
       }
       return newSet
     })
-  }, [])
+    
+    // 当选中账户时，调用 onAccountSelect 回调
+    if (checked && onAccountSelect) {
+      const selectedAccount = displayAccounts.find(account => account.id === accountId)
+      if (selectedAccount) {
+        onAccountSelect(selectedAccount)
+      }
+    }
+  }, [onAccountSelect, displayAccounts])
 
   const handleSelectAll = React.useCallback((checked: boolean) => {
     if (checked) {
@@ -329,7 +417,12 @@ export function AccountChartOptimized({
   const handleEditAccount = React.useCallback((account: Account) => {
     setEditingAccount(account)
     setShowAccountForm(true)
-  }, [])
+    
+    // 调用 onAccountEdit 回调
+    if (onAccountEdit) {
+      onAccountEdit(account)
+    }
+  }, [onAccountEdit])
 
   const handleDeleteAccount = React.useCallback(async (accountId: string) => {
     if (!confirm("确定要删除这个账户吗？此操作不可撤销。")) {
@@ -345,6 +438,11 @@ export function AccountChartOptimized({
         await refetchAccounts()
       }
       
+      // 调用 onAccountDelete 回调
+      if (onAccountDelete) {
+        onAccountDelete(accountId)
+      }
+      
       toast({
         title: "账户删除成功",
         description: "账户已从系统中删除",
@@ -358,7 +456,7 @@ export function AccountChartOptimized({
     } finally {
       setSaving(false)
     }
-  }, [enableFirebase, refetchAccounts, toast])
+  }, [enableFirebase, refetchAccounts, toast, onAccountDelete])
 
   // 批量删除处理函数
   const handleBatchDelete = React.useCallback(async () => {
@@ -416,8 +514,13 @@ export function AccountChartOptimized({
     try {
       setSaving(true)
       
+      // 调试日志：检查接收到的数据
+      console.log('handleSaveAccount 接收到的数据:', accountData)
+      console.log('父账户字段值:', accountData.parent)
+      
       if (editingAccount) {
         // 更新现有账户
+        console.log('更新账户，ID:', editingAccount.id)
         await updateAccount(editingAccount.id!, accountData)
         
         toast({
@@ -426,7 +529,13 @@ export function AccountChartOptimized({
         })
       } else {
         // 添加新账户
+        console.log('创建新账户')
         await addAccount(accountData)
+        
+        // 调用 onAccountAdd 回调
+        if (onAccountAdd) {
+          onAccountAdd(accountData)
+        }
         
         toast({
           title: "账户创建成功",
@@ -450,7 +559,7 @@ export function AccountChartOptimized({
     } finally {
       setSaving(false)
     }
-  }, [editingAccount, enableFirebase, refetchAccounts, toast])
+  }, [editingAccount, enableFirebase, refetchAccounts, toast, onAccountAdd])
 
   // 优化的导出处理函数
   const handleExport = React.useCallback(async (exportOptions: {
@@ -732,6 +841,7 @@ export function AccountChartOptimized({
                 <TableHead>账户代码</TableHead>
                 <TableHead>账户名称</TableHead>
                 <TableHead>类型</TableHead>
+                <TableHead>父账户</TableHead>
                 <TableHead className="text-right">余额</TableHead>
                 <TableHead>描述</TableHead>
                 <TableHead>操作</TableHead>
@@ -748,6 +858,8 @@ export function AccountChartOptimized({
                   onView={handleViewAccount}
                   isSelected={selectedAccounts.has(account.id!)}
                   hasPermission={true}
+                  level={(account as any).level || 0}
+                  hasChildren={(account as any).hasChildren || false}
                 />
               ))}
             </TableBody>

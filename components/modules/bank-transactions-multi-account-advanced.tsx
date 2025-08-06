@@ -19,8 +19,6 @@ import {
   CheckSquare,
   Square,
   Calendar,
-  BarChart3,
-  PieChart,
   FileSpreadsheet
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -68,6 +66,13 @@ import { RoleLevels, UserRoles } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
 import { BankTransactionsCharts } from "./bank-transactions-charts"
 import { PasteImportDialog } from "./paste-import-dialog"
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel"
 
 interface TransactionFormData {
   date: string
@@ -247,6 +252,15 @@ export function BankTransactionsMultiAccountAdvanced() {
   // 批量操作状态
   const [selectedTransactions, setSelectedTransactions] = React.useState<Set<string>>(new Set())
   const [isSelectAll, setIsSelectAll] = React.useState(false)
+  const [isBatchEditOpen, setIsBatchEditOpen] = React.useState(false)
+  const [batchFormData, setBatchFormData] = React.useState({
+    payer: "none",
+    projectid: "none",
+    category: "none"
+  })
+  const [batchProjectYearFilter, setBatchProjectYearFilter] = React.useState("all")
+  
+
 
   // 表单状态
   const [isFormOpen, setIsFormOpen] = React.useState(false)
@@ -538,6 +552,123 @@ export function BankTransactionsMultiAccountAdvanced() {
       })
     }
   }
+
+  // 批量更新交易
+  const handleBatchUpdate = async () => {
+    if (!currentUser || selectedTransactions.size === 0) return
+
+    try {
+      console.log('=== 批量更新交易记录开始 ===')
+      console.log('当前用户:', currentUser.uid)
+      console.log('选中的交易数量:', selectedTransactions.size)
+      console.log('选中的交易ID列表:', Array.from(selectedTransactions))
+      console.log('批量表单数据:', batchFormData)
+      
+      const updateData: any = {}
+      
+      if (batchFormData.payer !== "none") {
+        updateData.payer = batchFormData.payer === "empty" ? "" : batchFormData.payer
+      }
+      if (batchFormData.projectid !== "none") {
+        if (batchFormData.projectid === "empty") {
+          updateData.projectid = ""
+          updateData.projectName = ""
+        } else {
+          updateData.projectid = batchFormData.projectid
+          // 确定项目名称
+          const selectedAccount = accounts.find(a => a.code === batchFormData.projectid)
+          if (selectedAccount) {
+            updateData.projectName = selectedAccount.name
+          } else {
+            const selectedProject = projects.find(p => p.projectid === batchFormData.projectid)
+            updateData.projectName = selectedProject?.name || ""
+          }
+        }
+      }
+      if (batchFormData.category !== "none") {
+        updateData.category = batchFormData.category === "empty" ? "" : batchFormData.category
+      }
+
+      console.log('=== 构建的批量更新数据 ===')
+      console.log('更新数据:', updateData)
+      console.log('更新数据键值:', Object.keys(updateData))
+
+      if (Object.keys(updateData).length === 0) {
+        console.log('没有要更新的数据，操作取消')
+        toast({
+          title: "警告",
+          description: "请至少选择一个字段进行更新",
+          variant: "destructive"
+        })
+        return
+      }
+
+      console.log('=== 开始批量更新 ===')
+      let updatedCount = 0
+      for (const transactionId of selectedTransactions) {
+        console.log(`正在更新交易ID: ${transactionId}`)
+        await updateDocument("transactions", transactionId, updateData)
+        updatedCount++
+        console.log(`交易ID ${transactionId} 更新完成，已更新 ${updatedCount} 笔`)
+      }
+
+      console.log('=== 批量更新完成 ===')
+      console.log('总共更新了', updatedCount, '笔交易')
+      
+      toast({
+        title: "批量更新成功",
+        description: `已更新 ${updatedCount} 笔交易`,
+      })
+      
+      // 重置批量编辑状态
+      setSelectedTransactions(new Set())
+      setIsSelectAll(false)
+      setIsBatchEditOpen(false)
+      setBatchFormData({
+        payer: "none",
+        projectid: "none",
+        category: "none"
+      })
+      setBatchProjectYearFilter("all")
+      
+      // 重新加载交易数据
+      await fetchTransactions()
+    } catch (error) {
+      console.error("Error batch updating transactions:", error)
+      toast({
+        title: "批量更新失败",
+        description: "无法更新选中的交易",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // 根据年份筛选项目（用于批量编辑）
+  const getFilteredProjectsForBatchEdit = () => {
+    let filteredProjects = projects
+    
+    if (batchProjectYearFilter !== "all") {
+      filteredProjects = projects.filter(project => {
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === batchProjectYearFilter
+      })
+    }
+    
+    // 按项目代码排序
+    return filteredProjects.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
+    })
+  }
+
+
 
   // 处理编辑交易
   const handleEditTransaction = (transaction: Transaction) => {
@@ -959,7 +1090,7 @@ export function BankTransactionsMultiAccountAdvanced() {
             variant="outline"
             onClick={() => setShowCharts(!showCharts)}
           >
-            <BarChart3 className="h-4 w-4 mr-2" />
+                            <TrendingUp className="h-4 w-4 mr-2" />
             {showCharts ? "隐藏图表" : "显示图表"}
           </Button>
         </div>
@@ -1020,7 +1151,7 @@ export function BankTransactionsMultiAccountAdvanced() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-green-900 dark:text-green-100">
-              ¥{totalIncome.toFixed(2)}
+              {totalIncome.toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -1032,7 +1163,7 @@ export function BankTransactionsMultiAccountAdvanced() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-red-900 dark:text-red-100">
-              ¥{totalExpense.toFixed(2)}
+              {totalExpense.toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -1044,7 +1175,7 @@ export function BankTransactionsMultiAccountAdvanced() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className={`text-2xl font-bold ${cumulativeBalance >= 0 ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>
-              {cumulativeBalance >= 0 ? '+' : ''}¥{Math.abs(cumulativeBalance).toFixed(2)}
+              {cumulativeBalance >= 0 ? '+' : ''}{Math.abs(cumulativeBalance).toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -1056,184 +1187,17 @@ export function BankTransactionsMultiAccountAdvanced() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
-              ¥{endingBalance.toFixed(2)}
+              {endingBalance.toFixed(2)}
             </div>
             <p className="text-xs text-indigo-700/70 dark:text-indigo-300/70 mt-1">
-              初始: ¥{initialBalance.toFixed(2)}
+              初始: {initialBalance.toFixed(2)}
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* 项目统计部分 */}
-      {projects.length > 0 && (
-        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
-          <CardHeader className="pb-3 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-purple-900 dark:text-purple-100">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
-                  项目统计分析
-                </CardTitle>
-                <CardDescription className="text-purple-700 dark:text-purple-300">
-                  按项目统计的交易情况和财务表现
-                </CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700">
-                <PieChart className="h-3 w-3 mr-1" />
-                {projects.length} 个项目
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            {/* 项目统计卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              {(() => {
-                const projectStats = projects.map(project => {
-                  const projectTransactions = transactions.filter(t => 
-                    t.projectid === project.projectid || t.projectName === project.name
-                  )
-                  const totalIncome = projectTransactions.reduce((sum, t) => sum + (t.income || 0), 0)
-                  const totalExpense = projectTransactions.reduce((sum, t) => sum + (t.expense || 0), 0)
-                  const netAmount = totalIncome - totalExpense
-                  const transactionCount = projectTransactions.length
-                  
-                  return {
-                    ...project,
-                    totalIncome,
-                    totalExpense,
-                    netAmount,
-                    transactionCount
-                  }
-                }).sort((a, b) => b.netAmount - a.netAmount).slice(0, 3)
 
-                return projectStats.map((project, index) => (
-                  <Card key={project.id} className="shadow-sm border-0 bg-gradient-to-br from-white to-gray-50/50 hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {project.name}
-                        </CardTitle>
-                        <Badge variant={project.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
-                          {project.status === 'Active' ? '进行中' : project.status === 'Completed' ? '已完成' : '暂停'}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">总收入</span>
-                        <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                          ¥{project.totalIncome.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">总支出</span>
-                        <span className="text-sm font-semibold text-red-600 dark:text-red-400">
-                          ¥{project.totalExpense.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">净额</span>
-                        <span className={`text-sm font-semibold ${project.netAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">交易数</span>
-                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                          {project.transactionCount} 笔
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              })()}
-            </div>
-
-            {/* 项目统计表格 */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">项目详细统计</h3>
-                <Badge variant="outline" className="bg-gray-100 dark:bg-gray-800">
-                  共 {projects.length} 个项目
-                </Badge>
-              </div>
-              
-              <div className="rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-gray-50 dark:bg-gray-800">
-                    <TableRow>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100">项目名称</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100">状态</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">总收入</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">总支出</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">净额</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">交易数</TableHead>
-                      <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-right">平均金额</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      const projectStats = projects.map(project => {
-                        const projectTransactions = transactions.filter(t => 
-                          t.projectid === project.projectid || t.projectName === project.name
-                        )
-                        const totalIncome = projectTransactions.reduce((sum, t) => sum + (t.income || 0), 0)
-                        const totalExpense = projectTransactions.reduce((sum, t) => sum + (t.expense || 0), 0)
-                        const netAmount = totalIncome - totalExpense
-                        const transactionCount = projectTransactions.length
-                        const avgAmount = transactionCount > 0 ? (totalIncome + totalExpense) / transactionCount : 0
-                        
-                        return {
-                          ...project,
-                          totalIncome,
-                          totalExpense,
-                          netAmount,
-                          transactionCount,
-                          avgAmount
-                        }
-                      }).sort((a, b) => b.netAmount - a.netAmount)
-
-                      return projectStats.map((project) => (
-                        <TableRow key={project.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                          <TableCell className="font-medium text-gray-900 dark:text-gray-100">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                              {project.name}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={project.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
-                              {project.status === 'Active' ? '进行中' : project.status === 'Completed' ? '已完成' : '暂停'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-green-600 dark:text-green-400">
-                            ¥{project.totalIncome.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-red-600 dark:text-red-400">
-                            ¥{project.totalExpense.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            <span className={project.netAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                              {project.netAmount >= 0 ? '+' : ''}¥{Math.abs(project.netAmount).toFixed(2)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600 dark:text-blue-400">
-                            {project.transactionCount} 笔
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-gray-600 dark:text-gray-400">
-                            ¥{project.avgAmount.toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    })()}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
        {/* 高级筛选面板 */}
       <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
@@ -1441,6 +1405,15 @@ export function BankTransactionsMultiAccountAdvanced() {
               </div>
               <div className="flex items-center space-x-2">
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBatchEditOpen(true)}
+                  className="h-8"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  批量设定
+                </Button>
+                <Button
                   variant="destructive"
                   size="sm"
                   onClick={handleBatchDelete}
@@ -1566,14 +1539,14 @@ export function BankTransactionsMultiAccountAdvanced() {
                       <TableCell className="max-w-xs truncate">{transaction.description}</TableCell>
                       <TableCell className="max-w-xs truncate">{transaction.description2}</TableCell>
                       <TableCell className="text-right">
-                        {transaction.expense ? `¥${parseFloat(transaction.expense.toString()).toFixed(2)}` : "-"}
+                        {transaction.expense ? `${parseFloat(transaction.expense.toString()).toFixed(2)}` : "-"}
                       </TableCell>
                       <TableCell className="text-right">
-                        {transaction.income ? `¥${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
+                        {transaction.income ? `${parseFloat(transaction.income.toString()).toFixed(2)}` : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         <span className={getFilteredRunningBalance(transaction.id!) >= 0 ? "text-green-600" : "text-red-600"}>
-                          ¥{getFilteredRunningBalance(transaction.id!).toFixed(2)}
+                          {getFilteredRunningBalance(transaction.id!).toFixed(2)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -1669,7 +1642,7 @@ export function BankTransactionsMultiAccountAdvanced() {
         <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
           <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
             <CardTitle className="flex items-center gap-2 text-lg font-semibold text-blue-900 dark:text-blue-100">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
+                              <TrendingUp className="h-5 w-5 text-blue-600" />
               数据可视化
             </CardTitle>
             <CardDescription className="text-blue-700 dark:text-blue-300">
@@ -1807,8 +1780,13 @@ export function BankTransactionsMultiAccountAdvanced() {
                 <Label htmlFor="project-year" className="text-sm font-medium">项目年份</Label>
                 <Select
                   value={formData.projectid ? (() => {
+                    // 检查是否是账户代码（纯数字）
+                    if (/^\d+$/.test(formData.projectid)) {
+                      return "no-year" // 账户代码没有年份概念
+                    }
+                    // 检查是否是项目ID格式（年份_BOD_项目名称）
                     const parts = formData.projectid.split('_')
-                    return parts.length >= 3 ? parts[0] : ""
+                    return parts.length >= 3 ? parts[0] : "no-year"
                   })() : "no-year"}
                   onValueChange={(value) => {
                     // 当项目年份改变时，清空项目户口
@@ -1896,6 +1874,11 @@ export function BankTransactionsMultiAccountAdvanced() {
                     </div>
                     {(() => {
                       const currentYear = formData.projectid ? (() => {
+                        // 检查是否是账户代码（纯数字）
+                        if (/^\d+$/.test(formData.projectid)) {
+                          return "" // 账户代码没有年份概念
+                        }
+                        // 检查是否是项目ID格式（年份_BOD_项目名称）
                         const parts = formData.projectid.split('_')
                         return parts.length >= 3 ? parts[0] : ""
                       })() : ""
@@ -1967,6 +1950,153 @@ export function BankTransactionsMultiAccountAdvanced() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量编辑对话框 */}
+      <Dialog open={isBatchEditOpen} onOpenChange={setIsBatchEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Edit className="h-5 w-5 text-blue-600" />
+              批量设定交易
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              为选中的 <span className="font-semibold text-blue-600">{selectedTransactions.size}</span> 笔交易设置付款人、项目户口和收支分类
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="batch-project-year">项目年份筛选</Label>
+              <Select value={batchProjectYearFilter} onValueChange={(value) => 
+                setBatchProjectYearFilter(value)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="选择项目年份" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">所有年份</SelectItem>
+                  {getAvailableProjectYears().map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}年
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="batch-payer">付款人</Label>
+              <Input
+                id="batch-payer"
+                value={batchFormData.payer === "none" ? "" : batchFormData.payer === "empty" ? "" : batchFormData.payer}
+                onChange={(e) => setBatchFormData({ ...batchFormData, payer: e.target.value })}
+                placeholder="付款人姓名"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="batch-projectid">项目户口</Label>
+              <Select value={batchFormData.projectid} onValueChange={(value) => 
+                setBatchFormData({ ...batchFormData, projectid: value })}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="选择项目户口" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">保持不变</SelectItem>
+                  <SelectItem value="empty">清空项目</SelectItem>
+                  
+                  {/* 账号户口分类 */}
+                  <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-blue-50 border-b">
+                    账号户口
+                  </div>
+                  {(() => {
+                    const accountGroups: Record<string, Account[]> = {}
+                    accounts.forEach(account => {
+                      const type = account.type
+                      if (!accountGroups[type]) {
+                        accountGroups[type] = []
+                      }
+                      accountGroups[type].push(account)
+                    })
+                    
+                    return Object.entries(accountGroups).map(([type, typeAccounts]) => (
+                      <div key={`account-${type}`}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
+                          {type}
+                        </div>
+                        {typeAccounts.map((account) => (
+                          <SelectItem key={`account-${account.id}`} value={account.code} className="ml-4">
+                            {account.code} - {account.name}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))
+                  })()}
+                  
+                  {/* 项目户口分类 */}
+                  <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-green-50 border-b mt-2">
+                    项目户口
+                  </div>
+                  {(() => {
+                    const filteredProjects = getFilteredProjectsForBatchEdit()
+                    return Object.entries(getGroupedProjects(filteredProjects)).map(([bodCategory, projects]) => (
+                      <div key={`project-${bodCategory}`}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
+                          {bodCategory}
+                        </div>
+                        {projects.map((project) => (
+                          <SelectItem key={`project-${project.id}`} value={project.projectid} className="ml-4">
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="batch-category">收支分类</Label>
+              <Select value={batchFormData.category} onValueChange={(value) => 
+                setBatchFormData({ ...batchFormData, category: value })}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="选择收支分类" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">保持不变</SelectItem>
+                  <SelectItem value="empty">清空分类</SelectItem>
+                  {categories
+                    .filter(category => category.isActive)
+                    .map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsBatchEditOpen(false)
+                  setBatchFormData({
+                    payer: "none",
+                    projectid: "none",
+                    category: "none"
+                  })
+                  setBatchProjectYearFilter("all")
+                }}
+                className="h-9"
+              >
+                取消
+              </Button>
+              <Button onClick={handleBatchUpdate} className="h-9">
+                <Save className="h-4 w-4 mr-2" />
+                批量更新
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

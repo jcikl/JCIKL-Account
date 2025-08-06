@@ -22,7 +22,18 @@ export async function getDocument<T>(collectionName: string, id: string): Promis
 
 export async function addDocument<T>(collectionName: string, data: Omit<T, "id">): Promise<string> {
   const docRef = await addDoc(collection(db, collectionName), data)
-  return docRef.id
+  const id = docRef.id
+  
+  // 触发相应的事件
+  try {
+    const { emitEvent } = await import('./event-bus')
+    const eventType = `${collectionName.slice(0, -1)}:created` as any
+    emitEvent(eventType, { [collectionName.slice(0, -1)]: { id, ...data } })
+  } catch (error) {
+    console.error('触发事件失败:', error)
+  }
+  
+  return id
 }
 
 export async function updateDocument<T>(
@@ -30,8 +41,32 @@ export async function updateDocument<T>(
   id: string,
   data: Partial<Omit<T, "id">>,
 ): Promise<void> {
+  // 获取更新前的数据用于事件触发
+  let previousData: any = null
+  try {
+    const docRef = doc(db, collectionName, id)
+    const docSnap = await getDoc(docRef)
+    if (docSnap.exists()) {
+      previousData = docSnap.data()
+    }
+  } catch (error) {
+    console.error('获取更新前数据失败:', error)
+  }
+
   const docRef = doc(db, collectionName, id)
   await updateDoc(docRef, data)
+  
+  // 触发相应的事件
+  try {
+    const { emitEvent } = await import('./event-bus')
+    const eventType = `${collectionName.slice(0, -1)}:updated` as any
+    emitEvent(eventType, { 
+      [collectionName.slice(0, -1)]: { id, ...data },
+      previousData 
+    })
+  } catch (error) {
+    console.error('触发事件失败:', error)
+  }
 }
 
 /**
@@ -58,6 +93,15 @@ export async function updateTransaction(
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   const docRef = doc(db, collectionName, id)
   await deleteDoc(docRef)
+  
+  // 触发相应的事件
+  try {
+    const { emitEvent } = await import('./event-bus')
+    const eventType = `${collectionName.slice(0, -1)}:deleted` as any
+    emitEvent(eventType, { [`${collectionName.slice(0, -1)}Id`]: id })
+  } catch (error) {
+    console.error('触发事件失败:', error)
+  }
 }
 
 // Account-specific operations
@@ -77,32 +121,35 @@ export async function checkAccountCodeExists(code: string): Promise<boolean> {
 
 export async function addAccount(accountData: Omit<Account, "id">): Promise<string> {
   try {
-    // console.log('Adding account to Firebase:', accountData)
+    console.log('Adding account to Firebase:', accountData)
+    console.log('父账户字段:', accountData.parent)
     
     const docRef = await addDoc(collection(db, "accounts"), {
       ...accountData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })
-    // console.log('Account added successfully with ID:', docRef.id)
+    console.log('Account added successfully with ID:', docRef.id)
     return docRef.id
   } catch (error) {
-    // console.error('Error adding account:', error)
+    console.error('Error adding account:', error)
     throw new Error(`Failed to add account: ${error}`)
   }
 }
 
 export async function updateAccount(id: string, accountData: Partial<Omit<Account, "id">>): Promise<void> {
   try {
-    // console.log('Updating account in Firebase:', { id, accountData })
+    console.log('Updating account in Firebase:', { id, accountData })
+    console.log('父账户字段:', accountData.parent)
+    
     const docRef = doc(db, "accounts", id)
     await updateDoc(docRef, {
       ...accountData,
       updatedAt: new Date().toISOString()
     })
-    // console.log('Account updated successfully')
+    console.log('Account updated successfully')
   } catch (error) {
-    // console.error('Error updating account:', error)
+    console.error('Error updating account:', error)
     throw new Error(`Failed to update account: ${error}`)
   }
 }
@@ -478,6 +525,19 @@ export async function getProjectById(id: string): Promise<Project | null> {
   }
 }
 
+// 新增：根据projectid查找项目的Firestore文档ID
+export async function getProjectIdByProjectId(projectId: string): Promise<string | null> {
+  try {
+    // console.log('Getting project Firestore ID by projectid:', projectId)
+    const projects = await getProjects()
+    const project = projects.find(p => p.projectid === projectId)
+    return project?.id || null
+  } catch (error) {
+    console.error('Error getting project ID by projectid:', error)
+    return null
+  }
+}
+
 export async function getProjectsByStatus(status: Project["status"]): Promise<Project[]> {
   try {
     // console.log('Getting projects by status:', status)
@@ -629,8 +689,18 @@ export async function getProjectSpentAmount(projectId: string): Promise<number> 
   try {
     //console.log('Calculating spent amount for project:', projectId)
     
-    // 获取项目信息
-    const project = await getProjectById(projectId)
+    // 获取项目信息 - 支持通过projectid或Firestore ID查找
+    let project: Project | null = null
+    
+    // 首先尝试作为Firestore ID查找
+    project = await getProjectById(projectId)
+    
+    // 如果没找到，尝试通过projectid字段查找
+    if (!project) {
+      const projects = await getProjects()
+      project = projects.find(p => p.projectid === projectId) || null
+    }
+    
     if (!project) {
       // console.log('Project not found:', projectId)
       return 0
@@ -1650,9 +1720,12 @@ export async function getTransactionsByBankAccount(bankAccountId: string): Promi
       
       // Sort in memory instead of in Firestore
       return transactionsWithoutOrder.sort((a, b) => {
-        const dateA = new Date(a.date).getTime()
-        const dateB = new Date(b.date).getTime()
-        return dateB - dateA // Descending order
+        const getDate = (date: any) => {
+          if (typeof date === 'string') return new Date(date).getTime()
+          if (date && typeof date === 'object' && 'seconds' in date) return date.seconds * 1000
+          return 0
+        }
+        return getDate(b.date) - getDate(a.date) // Descending order
       })
     }
     
@@ -1670,10 +1743,46 @@ export async function getTransactionsByBankAccount(bankAccountId: string): Promi
     
     // Sort in memory instead of in Firestore
     return transactions.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
-      return dateB - dateA // Descending order
+      const getDate = (date: any) => {
+        if (typeof date === 'string') return new Date(date).getTime()
+        if (date && typeof date === 'object' && 'seconds' in date) return date.seconds * 1000
+        return 0
+      }
+      return getDate(b.date) - getDate(a.date) // Descending order
     })
+  }
+}
+
+/**
+ * 根据项目ID获取交易记录
+ */
+export async function getTransactionsByProject(projectId: string): Promise<Transaction[]> {
+  try {
+    // console.log('Getting transactions by project:', projectId)
+    
+    // 获取所有交易记录
+    const allTransactions = await getTransactions()
+    
+    // 根据projectid匹配项目交易记录
+    const projectTransactions = allTransactions.filter(transaction => 
+      transaction.projectid === projectId
+    )
+    
+    // 按日期降序排序
+    projectTransactions.sort((a, b) => {
+      const getDate = (date: any) => {
+        if (typeof date === 'string') return new Date(date).getTime()
+        if (date && typeof date === 'object' && 'seconds' in date) return date.seconds * 1000
+        return 0
+      }
+      return getDate(b.date) - getDate(a.date)
+    })
+    
+    // console.log(`Found ${projectTransactions.length} transactions for project ${projectId}`)
+    return projectTransactions
+  } catch (error) {
+    console.error('Error getting transactions by project:', error)
+    throw new Error(`Failed to get transactions by project: ${error}`)
   }
 }
 

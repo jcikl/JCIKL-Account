@@ -94,6 +94,29 @@ class OptimizedCache {
     return deleted
   }
 
+  // 智能缓存失效
+  invalidate(pattern: string): void {
+    const keysToDelete: string[] = []
+    
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) {
+        keysToDelete.push(key)
+      }
+    }
+    
+    keysToDelete.forEach(key => {
+      this.cache.delete(key)
+      console.log(`🗑️ 失效缓存: ${key}`)
+    })
+    
+    this.updateStats()
+  }
+
+  // 批量失效缓存
+  invalidateMultiple(patterns: string[]): void {
+    patterns.forEach(pattern => this.invalidate(pattern))
+  }
+
   // 清空缓存
   clear(): void {
     this.cache.clear()

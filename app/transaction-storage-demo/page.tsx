@@ -29,7 +29,7 @@ export default function TransactionStorageDemo() {
     description: "",
     expense: "",
     income: "",
-    status: "Completed" as const,
+    status: "Completed" as "Completed" | "Pending" | "Draft",
     payer: "",
     projectid: "",
     category: ""
@@ -114,7 +114,7 @@ export default function TransactionStorageDemo() {
         category: formData.category,
         bankAccountId: selectedBankAccountId,
         bankAccountName: bankAccounts.find(acc => acc.id === selectedBankAccountId)?.name || "",
-        createdByUid: currentUser.uid
+        createdByUid: currentUser?.uid || ""
       }
 
       // 使用 addTransactionWithBankAccount 函数将交易存储到指定银行账户
@@ -207,8 +207,8 @@ export default function TransactionStorageDemo() {
                 <Label htmlFor="status">状态</Label>
                 <Select 
                   value={formData.status} 
-                  onValueChange={(value: "Completed" | "Pending" | "Draft") => 
-                    setFormData({ ...formData, status: value })
+                  onValueChange={(value) => 
+                    setFormData({ ...formData, status: value as "Completed" | "Pending" | "Draft" })
                   }
                 >
                   <SelectTrigger>
@@ -321,7 +321,7 @@ export default function TransactionStorageDemo() {
                       <div>
                         <div className="font-medium">{transaction.description}</div>
                         <div className="text-sm text-muted-foreground">
-                          {new Date(transaction.date).toLocaleDateString()} | {transaction.status}
+                          {new Date(typeof transaction.date === 'string' ? transaction.date : transaction.date.seconds * 1000).toLocaleDateString()} | {transaction.status}
                         </div>
                         {transaction.payer && (
                           <div className="text-sm text-muted-foreground">

@@ -15,6 +15,7 @@ import {
   updateProject, 
   deleteProject 
 } from "@/lib/firebase-utils"
+import { eventBus } from "@/lib/event-bus"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles, BODCategories, type Project } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
@@ -191,6 +192,15 @@ export function ProjectAccountsOptimized() {
     setShowProjectForm(true)
   }
 
+  // 处理项目表单对话框状态变化
+  const handleProjectFormOpenChange = (open: boolean) => {
+    setShowProjectForm(open)
+    if (!open) {
+      // 对话框关闭时重置编辑状态
+      setEditingProject(null)
+    }
+  }
+
   // 处理编辑项目
   const handleEditProject = (project: Project) => {
     setEditingProject(project)
@@ -245,8 +255,17 @@ export function ProjectAccountsOptimized() {
       }
       
       if (editingProject) {
+        // 保存原始项目数据用于事件触发
+        const originalProject = { ...editingProject }
+        
         // 更新现有项目
         await updateProject(editingProject.id!, projectData)
+        
+        // 触发项目更新事件
+        eventBus.emit('project:updated', {
+          project: { ...editingProject, ...projectData },
+          previousData: originalProject
+        })
         
         // 清除相关缓存
         globalCache.delete('projects')
@@ -278,6 +297,9 @@ export function ProjectAccountsOptimized() {
       
       // 重新获取数据
       await refetchProjects()
+      
+      // 重置编辑状态
+      setEditingProject(null)
     } catch (error) {
       toast({
         title: "操作失败",
@@ -303,6 +325,9 @@ export function ProjectAccountsOptimized() {
           const existingProject = projects?.find(p => p.projectid === projectData.projectid)
           
           if (existingProject) {
+            // 保存原始项目数据用于事件触发
+            const originalProject = { ...existingProject }
+            
             // 更新现有项目
             const updateData = {
               name: projectData.name,
@@ -314,6 +339,13 @@ export function ProjectAccountsOptimized() {
             }
             
             await updateProject(existingProject.id!, updateData)
+            
+            // 触发项目更新事件
+            eventBus.emit('project:updated', {
+              project: { ...existingProject, ...updateData },
+              previousData: originalProject
+            })
+            
             updatedCount++
           } else {
             // 添加新项目
@@ -912,7 +944,7 @@ export function ProjectAccountsOptimized() {
       {/* Project Form Dialog */}
       <ProjectFormDialogOptimized
         open={showProjectForm}
-        onOpenChange={setShowProjectForm}
+        onOpenChange={handleProjectFormOpenChange}
         project={editingProject}
         existingProjects={projects || []}
         onSave={handleSaveProject}

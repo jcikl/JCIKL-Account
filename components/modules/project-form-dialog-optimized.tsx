@@ -51,7 +51,7 @@ const BODCategoryOption = React.memo(({
   value, 
   label 
 }: { 
-  value: string
+  value: BODCategory
   label: string 
 }) => (
   <SelectItem value={value}>
@@ -223,7 +223,18 @@ export function ProjectFormDialogOptimized({
   const handleSubmit = React.useCallback(async (data: ProjectFormData) => {
     setSaving(true)
     try {
-      await onSave(data)
+      // 生成项目代码
+      const projectDataWithCode = {
+        ...data,
+        projectid: project?.projectid || generateProjectCode(
+          data.name,
+          data.bodCategory,
+          existingProjects,
+          data.projectYear
+        )
+      }
+      
+      await onSave(projectDataWithCode)
       onOpenChange(false)
       toast({
         title: project ? "项目更新成功" : "项目创建成功",
@@ -243,7 +254,7 @@ export function ProjectFormDialogOptimized({
     } finally {
       setSaving(false)
     }
-  }, [onSave, onOpenChange, toast, project, form])
+  }, [onSave, onOpenChange, toast, project, form, existingProjects])
 
   // 优化的取消处理
   const handleCancel = React.useCallback(() => {

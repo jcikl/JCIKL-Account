@@ -14,11 +14,12 @@ import {
   Box,
   DollarSign,
 } from "lucide-react"
-import { SidebarProvider } from "@/components/ui/sidebar"
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
 import { useAuth } from "@/components/auth/auth-context"
 import { UserRoles, RoleLevels } from "@/lib/data"
+import { initializeAutoSync } from "@/lib/auto-sync-service"
 
 // 核心模块 - 预加载（用户最常用的模块）
 import { DashboardOverviewOptimized } from "@/components/modules/dashboard-overview-optimized"
@@ -292,11 +293,17 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// 主仪表板组件
-export function AccountingDashboardOptimized() {
+// 内部仪表板组件 - 使用 useSidebar hook
+function DashboardContent() {
   const { currentUser, logout, hasPermission } = useAuth()
   const [currentPage, setCurrentPage] = React.useState("Dashboard")
   const [preloadedModules, setPreloadedModules] = React.useState<string[]>([])
+  const { state, isMobile } = useSidebar()
+
+  // 初始化自动同步服务
+  React.useEffect(() => {
+    initializeAutoSync()
+  }, [])
 
   // 根据用户角色确定预加载模块
   React.useEffect(() => {
@@ -329,24 +336,63 @@ export function AccountingDashboardOptimized() {
     }
   }, [currentPage, preloadedModules])
 
+  // 计算响应式宽度类名
+  const getResponsiveWidthClasses = () => {
+    if (isMobile) {
+      // 移动设备：全宽显示，考虑移动端侧边栏
+      return "w-full min-w-0"
+    }
+    
+    // 桌面设备：根据侧边栏状态调整宽度
+    if (state === "collapsed") {
+      // 侧边栏收起时：充分利用可用空间
+      return "w-full min-w-0 transition-all duration-300 ease-in-out"
+    } else {
+      // 侧边栏展开时：适应剩余空间
+      return "w-full min-w-0 transition-all duration-300 ease-in-out"
+    }
+  }
+
+  // 计算容器样式
+  const getContainerStyles = () => {
+    const baseClasses = "flex-1 flex flex-col"
+    
+    if (isMobile) {
+      return `${baseClasses} w-full min-w-0`
+    }
+    
+    return `${baseClasses} min-w-0`
+  }
+
   return (
-    <SidebarProvider>
+    <>
       <AppSidebar
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
         navigationData={navigationData}
         hasPermission={hasPermission}
       />
-      <div className="flex-1 flex flex-col">
+      <div className={getContainerStyles()}>
         <AppHeader currentUser={currentUser} logout={logout} currentPage={currentPage} />
-        <main className="flex-1 overflow-auto">
-          <OptimizedModuleRenderer
-            moduleName={currentPage}
-            hasPermission={hasPermission}
-            requiredLevel={getCurrentPageRequiredLevel()}
-          />
+        <main className={`flex-1 ${getResponsiveWidthClasses()} overflow-x-auto`}>
+          <div className="w-full max-w-none px-4 sm:px-6 lg:px-8">
+            <OptimizedModuleRenderer
+              moduleName={currentPage}
+              hasPermission={hasPermission}
+              requiredLevel={getCurrentPageRequiredLevel()}
+            />
+          </div>
         </main>
       </div>
+    </>
+  )
+}
+
+// 主仪表板组件
+export function AccountingDashboardOptimized() {
+  return (
+    <SidebarProvider>
+      <DashboardContent />
     </SidebarProvider>
   )
 } 

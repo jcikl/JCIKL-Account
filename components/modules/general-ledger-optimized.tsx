@@ -563,10 +563,23 @@ export function GeneralLedgerOptimized() {
         <TabsContent value="accounts" className="space-y-4">
           <AccountChartOptimized 
             accounts={accounts || []}
-            onAccountSelect={(account) => console.log('选择账户:', account)}
-            onAccountEdit={(account) => console.log('编辑账户:', account)}
-            onAccountDelete={(accountId) => console.log('删除账户:', accountId)}
-            onAccountAdd={() => console.log('添加账户')}
+            onAccountSelect={(account) => {
+              console.log('选择账户:', account)
+              // 可以在这里添加选择账户后的逻辑
+            }}
+            onAccountEdit={(account) => {
+              console.log('编辑账户:', account)
+              // 可以在这里添加编辑账户后的逻辑
+            }}
+            onAccountDelete={(accountId) => {
+              console.log('删除账户:', accountId)
+              // 可以在这里添加删除账户后的逻辑
+            }}
+            onAccountAdd={(accountData) => {
+              console.log('添加账户:', accountData)
+              // 可以在这里添加创建账户后的逻辑
+            }}
+            enableFirebase={true}
           />
         </TabsContent>
 
