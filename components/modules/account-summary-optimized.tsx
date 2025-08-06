@@ -151,11 +151,11 @@ export function AccountSummaryOptimized({ accounts, onRefresh }: AccountSummaryP
 
   // 优化的统计数据计算
   const stats = React.useMemo((): EnhancedAccountStats => {
-    const totalAccounts = accounts.length
+    const totalAccounts = accounts?.length || 0
     const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0)
-    const positiveAccounts = accounts.filter(account => account.balance > 0).length
-    const negativeAccounts = accounts.filter(account => account.balance < 0).length
-    const zeroBalanceAccounts = accounts.filter(account => account.balance === 0).length
+    const positiveAccounts = accounts.filter(account => account.balance > 0)?.length || 0
+    const negativeAccounts = accounts.filter(account => account.balance < 0)?.length || 0
+    const zeroBalanceAccounts = accounts.filter(account => account.balance === 0)?.length || 0
 
     const assets = accounts.filter(account => account.type === "Asset")
     const liabilities = accounts.filter(account => account.type === "Liability")
@@ -169,26 +169,26 @@ export function AccountSummaryOptimized({ accounts, onRefresh }: AccountSummaryP
     const debtToEquityRatio = totalEquity > 0 ? Math.abs(totalLiabilities) / totalEquity : 0
     const assetUtilization = totalAssets > 0 ? (Math.abs(totalLiabilities) + totalEquity) / totalAssets : 0
 
-    const healthyAccounts = accounts.filter(account => {
+    const healthyAccounts = accounts?.filter(account => {
       if (account.type === "Asset") return account.balance >= 0
       if (account.type === "Liability") return account.balance <= 0
       if (account.type === "Equity") return account.balance >= 0
       return true
-    }).length
+    })?.length || 0
 
-    const warningAccounts = accounts.filter(account => {
+    const warningAccounts = accounts?.filter(account => {
       if (account.type === "Asset" && account.balance < 0) return true
       if (account.type === "Liability" && account.balance > 0) return true
       if (account.type === "Equity" && account.balance < 0) return true
       return false
-    }).length
+    })?.length || 0
 
-    const criticalAccounts = accounts.filter(account => {
+    const criticalAccounts = accounts?.filter(account => {
       if (account.type === "Asset" && account.balance < -1000) return true
       if (account.type === "Liability" && account.balance > 1000) return true
       if (account.type === "Equity" && account.balance < -1000) return true
       return false
-    }).length
+    })?.length || 0
 
     const accountTypes = ["Asset", "Liability", "Equity", "Revenue", "Expense"]
     const typeStats = accountTypes.map(type => {
@@ -198,12 +198,12 @@ export function AccountSummaryOptimized({ accounts, onRefresh }: AccountSummaryP
       
       return {
         type,
-        count: accountsOfType.length,
+        count: accountsOfType?.length || 0,
         totalBalance: totalBalanceOfType,
-        percentage: (accountsOfType.length / totalAccounts) * 100,
-        averageBalance: accountsOfType.length > 0 ? totalBalanceOfType / accountsOfType.length : 0,
-        maxBalance: balances.length > 0 ? Math.max(...balances) : 0,
-        minBalance: balances.length > 0 ? Math.min(...balances) : 0
+        percentage: ((accountsOfType?.length || 0) / totalAccounts) * 100,
+        averageBalance: (accountsOfType?.length || 0) > 0 ? totalBalanceOfType / (accountsOfType?.length || 1) : 0,
+        maxBalance: balances?.length > 0 ? Math.max(...balances) : 0,
+        minBalance: balances?.length > 0 ? Math.min(...balances) : 0
       }
     })
 
@@ -214,18 +214,18 @@ export function AccountSummaryOptimized({ accounts, onRefresh }: AccountSummaryP
       
       return {
         statement,
-        count: accountsOfStatement.length,
+        count: accountsOfStatement?.length || 0,
         totalBalance: totalBalanceOfStatement,
-        percentage: (accountsOfStatement.length / totalAccounts) * 100
+        percentage: ((accountsOfStatement?.length || 0) / totalAccounts) * 100
       }
     })
 
     const balanceDistribution = {
-      veryHigh: accounts.filter(account => Math.abs(account.balance) > 100000).length,
-      high: accounts.filter(account => Math.abs(account.balance) > 10000 && Math.abs(account.balance) <= 100000).length,
-      medium: accounts.filter(account => Math.abs(account.balance) > 1000 && Math.abs(account.balance) <= 10000).length,
-      low: accounts.filter(account => Math.abs(account.balance) > 100 && Math.abs(account.balance) <= 1000).length,
-      veryLow: accounts.filter(account => Math.abs(account.balance) <= 100).length
+      veryHigh: accounts?.filter(account => Math.abs(account.balance) > 100000)?.length || 0,
+      high: accounts?.filter(account => Math.abs(account.balance) > 10000 && Math.abs(account.balance) <= 100000)?.length || 0,
+      medium: accounts?.filter(account => Math.abs(account.balance) > 1000 && Math.abs(account.balance) <= 10000)?.length || 0,
+      low: accounts?.filter(account => Math.abs(account.balance) > 100 && Math.abs(account.balance) <= 1000)?.length || 0,
+      veryLow: accounts?.filter(account => Math.abs(account.balance) <= 100)?.length || 0
     }
 
     const trends = {
@@ -377,7 +377,7 @@ export function AccountSummaryOptimized({ accounts, onRefresh }: AccountSummaryP
               </CardContent>
             </Card>
 
-            {stats.financialStatementStats.length > 0 && (
+            {stats.financialStatementStats?.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
