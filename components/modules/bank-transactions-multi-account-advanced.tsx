@@ -61,6 +61,7 @@ import {
   getCategories
 } from "@/lib/firebase-utils"
 import type { Transaction, Account, Project, BankAccount, Category } from "@/lib/data"
+import { BODCategories } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
@@ -111,6 +112,9 @@ interface AdvancedFilters {
   status: string
   project: string
   category: string
+  year: string
+  monthStart: string
+  monthEnd: string
 }
 
 /**
@@ -198,12 +202,18 @@ export function BankTransactionsMultiAccountAdvanced() {
 
   // 搜索和筛选状态
   const [searchTerm, setSearchTerm] = React.useState("")
+  // 获取当前年份
+  const currentYear = new Date().getFullYear().toString()
+  
   const [advancedFilters, setAdvancedFilters] = React.useState<AdvancedFilters>({
     dateRange: { start: "", end: "" },
     amountRange: { min: "", max: "" },
     status: "all",
     project: "all",
-    category: "all"
+    category: "all",
+    year: currentYear,
+    monthStart: "all",
+    monthEnd: "all"
   })
 
   // 为筛选后的交易计算累计余额
@@ -294,6 +304,8 @@ export function BankTransactionsMultiAccountAdvanced() {
 
   // 高级筛选显示状态
   const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false)
+  // 图表弹窗显示状态
+  const [showChartsDialog, setShowChartsDialog] = React.useState(false)
 
   // 加载交易数据
   const fetchTransactions = React.useCallback(async () => {
@@ -396,6 +408,38 @@ export function BankTransactionsMultiAccountAdvanced() {
 
     if (advancedFilters.category !== "all") {
       filtered = filtered.filter(transaction => transaction.category === advancedFilters.category)
+    }
+
+    // 年份筛选
+    if (advancedFilters.year !== "all") {
+      filtered = filtered.filter(transaction => {
+        const transactionDate = typeof transaction.date === "string" 
+          ? new Date(transaction.date) 
+          : new Date(transaction.date.seconds * 1000)
+        return transactionDate.getFullYear().toString() === advancedFilters.year
+      })
+    }
+
+    // 月份开始筛选
+    if (advancedFilters.monthStart !== "all") {
+      filtered = filtered.filter(transaction => {
+        const transactionDate = typeof transaction.date === "string" 
+          ? new Date(transaction.date) 
+          : new Date(transaction.date.seconds * 1000)
+        const month = String(transactionDate.getMonth() + 1).padStart(2, '0')
+        return month >= advancedFilters.monthStart
+      })
+    }
+
+    // 月份结束筛选
+    if (advancedFilters.monthEnd !== "all") {
+      filtered = filtered.filter(transaction => {
+        const transactionDate = typeof transaction.date === "string" 
+          ? new Date(transaction.date) 
+          : new Date(transaction.date.seconds * 1000)
+        const month = String(transactionDate.getMonth() + 1).padStart(2, '0')
+        return month <= advancedFilters.monthEnd
+      })
     }
 
     // 日期范围筛选
@@ -668,6 +712,31 @@ export function BankTransactionsMultiAccountAdvanced() {
     })
   }
 
+  // 根据年份筛选项目（用于高级筛选）
+  const getFilteredProjectsForAdvancedFilter = () => {
+    let filteredProjects = projects
+    
+    if (advancedFilters.year !== "all") {
+      filteredProjects = projects.filter(project => {
+        const projectYear = project.projectid.split('_')[0]
+        return projectYear === advancedFilters.year
+      })
+    }
+    
+    // 按项目代码排序
+    return filteredProjects.sort((a, b) => {
+      // 首先按年份排序（降序）
+      const yearA = a.projectid.split('_')[0]
+      const yearB = b.projectid.split('_')[0]
+      if (yearA !== yearB) {
+        return parseInt(yearB) - parseInt(yearA)
+      }
+      
+      // 然后按项目代码排序（升序）
+      return a.projectid.localeCompare(b.projectid)
+    })
+  }
+
 
 
   // 处理编辑交易
@@ -891,7 +960,56 @@ export function BankTransactionsMultiAccountAdvanced() {
       }
       grouped[category].push(project)
     })
-    return grouped
+    
+    // 按BOD分类顺序排序
+    const sortedGrouped: Record<string, Project[]> = {}
+    const bodOrder = ['P', 'HT', 'EVP', 'LS', 'GLC', 'VPI', 'VPB', 'VPIA', 'VPC', 'VPLOM']
+    
+    bodOrder.forEach(bod => {
+      if (grouped[bod]) {
+        sortedGrouped[bod] = grouped[bod].sort((a, b) => a.name.localeCompare(b.name))
+      }
+    })
+    
+    // 添加其他未在预定义顺序中的分类
+    Object.keys(grouped).forEach(category => {
+      if (!bodOrder.includes(category)) {
+        sortedGrouped[category] = grouped[category].sort((a, b) => a.name.localeCompare(b.name))
+      }
+    })
+    
+    return sortedGrouped
+  }
+
+  // 获取可用的年份
+  const getAvailableYears = () => {
+    const years = new Set<string>()
+    transactions.forEach(transaction => {
+      const date = typeof transaction.date === 'string' 
+        ? new Date(transaction.date) 
+        : new Date(transaction.date.seconds * 1000)
+      years.add(date.getFullYear().toString())
+    })
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))
+  }
+
+  // 获取月份选项
+  const getMonthOptions = () => {
+    return [
+      { value: "all", label: "全部月份" },
+      { value: "01", label: "1月" },
+      { value: "02", label: "2月" },
+      { value: "03", label: "3月" },
+      { value: "04", label: "4月" },
+      { value: "05", label: "5月" },
+      { value: "06", label: "6月" },
+      { value: "07", label: "7月" },
+      { value: "08", label: "8月" },
+      { value: "09", label: "9月" },
+      { value: "10", label: "10月" },
+      { value: "11", label: "11月" },
+      { value: "12", label: "12月" }
+    ]
   }
 
   // 处理导入
@@ -1088,10 +1206,10 @@ export function BankTransactionsMultiAccountAdvanced() {
 
           <Button
             variant="outline"
-            onClick={() => setShowCharts(!showCharts)}
+            onClick={() => setShowChartsDialog(true)}
           >
-                            <TrendingUp className="h-4 w-4 mr-2" />
-            {showCharts ? "隐藏图表" : "显示图表"}
+            <TrendingUp className="h-4 w-4 mr-2" />
+            显示图表
           </Button>
         </div>
       </div>
@@ -1255,28 +1373,59 @@ export function BankTransactionsMultiAccountAdvanced() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="space-y-1">
-                <Label className="text-sm font-medium">日期范围 - 开始</Label>
-                <Input
-                  type="date"
-                  value={advancedFilters.dateRange.start}
-                  onChange={(e) => setAdvancedFilters(prev => ({
-                    ...prev,
-                    dateRange: { ...prev.dateRange, start: e.target.value }
-                  }))}
-                  className="h-9"
-                />
+                <Label className="text-sm font-medium">年份筛选</Label>
+                <Select 
+                  value={advancedFilters.year} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, year: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部年份</SelectItem>
+                    {getAvailableYears().map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}年
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-sm font-medium">日期范围 - 结束</Label>
-                <Input
-                  type="date"
-                  value={advancedFilters.dateRange.end}
-                  onChange={(e) => setAdvancedFilters(prev => ({
-                    ...prev,
-                    dateRange: { ...prev.dateRange, end: e.target.value }
-                  }))}
-                  className="h-9"
-                />
+                <Label className="text-sm font-medium">月份开始</Label>
+                <Select 
+                  value={advancedFilters.monthStart} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, monthStart: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getMonthOptions().map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">月份结束</Label>
+                <Select 
+                  value={advancedFilters.monthEnd} 
+                  onValueChange={(value) => setAdvancedFilters(prev => ({ ...prev, monthEnd: value }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getMonthOptions().map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-sm font-medium">金额范围 - 最小值</Label>
@@ -1332,10 +1481,17 @@ export function BankTransactionsMultiAccountAdvanced() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">全部项目</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id!}>
-                        {project.name}
-                      </SelectItem>
+                    {Object.entries(getGroupedProjects(getFilteredProjectsForAdvancedFilter())).map(([bodCategory, projects]) => (
+                      <div key={`advanced-filter-${bodCategory}`}>
+                        <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
+                          {bodCategory} - {BODCategories[bodCategory as keyof typeof BODCategories] || bodCategory}
+                        </div>
+                        {projects.map((project) => (
+                          <SelectItem key={`advanced-filter-project-${project.id}`} value={project.projectid} className="ml-4">
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </div>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1373,7 +1529,10 @@ export function BankTransactionsMultiAccountAdvanced() {
                   amountRange: { min: "", max: "" },
                   status: "all",
                   project: "all",
-                  category: "all"
+                  category: "all",
+                  year: currentYear,
+                  monthStart: "all",
+                  monthEnd: "all"
                 })}
                 className="h-8"
               >
@@ -1637,26 +1796,7 @@ export function BankTransactionsMultiAccountAdvanced() {
         </Card>
       )}
 
-      {/* 数据可视化 */}
-      {showCharts && (
-        <Card className="shadow-sm border-0 bg-gradient-to-r from-white to-gray-50/50">
-          <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-blue-900 dark:text-blue-100">
-                              <TrendingUp className="h-5 w-5 text-blue-600" />
-              数据可视化
-            </CardTitle>
-            <CardDescription className="text-blue-700 dark:text-blue-300">
-              交易数据的图表分析和统计展示
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <BankTransactionsCharts 
-              transactions={transactions}
-              bankAccount={bankAccounts.find(acc => acc.id === selectedBankAccountId) || null}
-            />
-          </CardContent>
-        </Card>
-      )}
+
 
 
 
@@ -1884,13 +2024,16 @@ export function BankTransactionsMultiAccountAdvanced() {
                       })() : ""
                       
                       const filteredProjects = currentYear 
-                        ? getFilteredProjectsByYear(currentYear)
+                        ? projects.filter(project => {
+                            const projectYear = project.projectid.split('_')[0]
+                            return projectYear === currentYear
+                          })
                         : projects
                       
                       return Object.entries(getGroupedProjects(filteredProjects)).map(([bodCategory, projects]) => (
                         <div key={`project-${bodCategory}`}>
                           <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
-                            {bodCategory}
+                            {bodCategory} - {BODCategories[bodCategory as keyof typeof BODCategories] || bodCategory}
                           </div>
                           {projects.map((project) => (
                             <SelectItem key={`project-${project.id}`} value={project.projectid} className="ml-4">
@@ -2041,7 +2184,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                     return Object.entries(getGroupedProjects(filteredProjects)).map(([bodCategory, projects]) => (
                       <div key={`project-${bodCategory}`}>
                         <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
-                          {bodCategory}
+                          {bodCategory} - {BODCategories[bodCategory as keyof typeof BODCategories] || bodCategory}
                         </div>
                         {projects.map((project) => (
                           <SelectItem key={`project-${project.id}`} value={project.projectid} className="ml-4">
@@ -2139,6 +2282,27 @@ export function BankTransactionsMultiAccountAdvanced() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 图表弹窗 */}
+      <Dialog open={showChartsDialog} onOpenChange={setShowChartsDialog}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-4 border-b border-gray-200 dark:border-gray-700">
+            <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              数据可视化分析
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              交易数据的图表分析和统计展示
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-4">
+            <BankTransactionsCharts 
+              transactions={transactions}
+              bankAccount={bankAccounts.find(acc => acc.id === selectedBankAccountId) || null}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

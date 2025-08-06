@@ -57,7 +57,7 @@ export default function TestProjectDetailsEditingPage() {
         <div>
           <h1 className="text-3xl font-bold">项目详情编辑功能测试</h1>
           <p className="text-muted-foreground mt-2">
-            测试项目详情对话框中的交易记录单条和批量编辑功能
+            测试项目详情对话框中的交易记录单条和批量编辑功能，包括项目户口参数编辑
           </p>
         </div>
       </div>
@@ -76,7 +76,8 @@ export default function TestProjectDetailsEditingPage() {
               <h3 className="font-semibold text-lg mb-2">单条编辑功能</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>点击交易记录行的编辑按钮进入编辑模式</li>
-                <li>可以修改日期、描述、分类、收入和支出</li>
+                <li>可以修改日期、描述、分类、项目户口、收入和支出</li>
+                <li>项目户口参数包括项目ID和项目名称</li>
                 <li>实时计算净额显示</li>
                 <li>支持保存和取消操作</li>
                 <li>可以删除单条交易记录</li>
@@ -88,9 +89,21 @@ export default function TestProjectDetailsEditingPage() {
                 <li>点击"批量编辑"按钮进入批量模式</li>
                 <li>可以选择多条交易记录</li>
                 <li>支持全选/取消全选</li>
-                <li>批量修改分类、收入、支出字段</li>
+                <li>批量修改分类、项目户口、收入、支出字段</li>
                 <li>一次性更新所有选中的记录</li>
                 <li>显示选中记录数量和更新进度</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg mb-2">项目户口参数编辑</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>支持修改交易记录的项目户口参数</li>
+                <li>可以从下拉列表中选择不同的项目</li>
+                <li>只显示活跃状态的项目，避免影响已完成项目的数据</li>
+                <li>当前项目户口会显示在下拉列表中（即使已完成）</li>
+                <li>自动更新项目名称显示</li>
+                <li>支持单条和批量编辑项目户口</li>
+                <li>编辑后会自动同步到数据库</li>
               </ul>
             </div>
             <div>
@@ -186,7 +199,8 @@ export default function TestProjectDetailsEditingPage() {
                 <li>选择一个项目并打开详情对话框</li>
                 <li>在交易记录表格中找到要编辑的记录</li>
                 <li>点击该行的编辑按钮（铅笔图标）</li>
-                <li>修改相关字段（日期、描述、分类、收入、支出）</li>
+                <li>修改相关字段（日期、描述、分类、项目户口、收入、支出）</li>
+                <li>项目户口可以从下拉列表中选择不同的项目</li>
                 <li>点击保存按钮确认修改，或点击取消按钮放弃修改</li>
               </ol>
             </div>
@@ -196,17 +210,31 @@ export default function TestProjectDetailsEditingPage() {
                 <li>在项目详情对话框中点击"批量编辑"按钮</li>
                 <li>使用复选框选择要批量修改的交易记录</li>
                 <li>可以使用表头的全选按钮快速选择所有记录</li>
-                <li>在批量编辑面板中设置要修改的字段（分类、收入、支出）</li>
+                <li>在批量编辑面板中设置要修改的字段（分类、项目户口、收入、支出）</li>
+                <li>项目户口支持批量修改为同一个项目</li>
                 <li>点击"批量更新"按钮执行批量修改</li>
                 <li>完成后点击"退出批量模式"返回正常视图</li>
               </ol>
+            </div>
+            <div>
+              <h4 className="font-medium mb-2">项目户口参数说明：</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>项目户口参数包括项目ID（projectid）和项目名称（projectName）</li>
+                <li>选择项目时会自动更新项目名称</li>
+                <li>可以修改交易记录所属的项目</li>
+                <li>修改后会影响项目的支出统计</li>
+                <li>支持将交易记录重新分配到其他项目</li>
+                <li>下拉列表只显示活跃状态的项目，保护已完成项目的数据</li>
+                <li>当前项目户口会显示在列表中（即使已完成），方便查看和保持</li>
+                <li>已完成的项目会显示" - 已完成"标识</li>
+              </ul>
             </div>
             <div>
               <h4 className="font-medium mb-2">注意事项：</h4>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
                 <li>编辑操作会实时同步到数据库</li>
                 <li>批量编辑时，未填写的字段将保持原值不变</li>
-                <li>删除操作会永久移除交易记录，请谨慎操作</li>
+                <li>项目户口修改会影响相关项目的统计</li>
                 <li>所有操作都有相应的成功/失败提示</li>
                 <li>编辑过程中会显示加载状态</li>
               </ul>

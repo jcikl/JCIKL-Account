@@ -83,13 +83,16 @@ export function ProjectAccountsOptimized() {
   const [showProjectDetails, setShowProjectDetails] = React.useState(false)
   const [selectedProject, setSelectedProject] = React.useState<Project | null>(null)
   
+  // 获取当前年份
+  const currentYear = new Date().getFullYear().toString()
+  
   // 筛选状态
   const [filters, setFilters] = React.useState<ProjectFilters>({
     search: "",
     status: "all",
     budgetRange: "all",
     bodCategory: "all",
-    projectYear: "all"
+    projectYear: currentYear
   })
 
   // 过滤项目（基于用户角色和筛选条件）
@@ -279,7 +282,7 @@ export function ProjectAccountsOptimized() {
         // 添加新项目
         const newProjectData = {
           ...projectData,
-          remaining: projectData.budget,
+          remaining: projectData.budget, // 新项目初始剩余预算等于总预算
           eventDate: projectData.eventDate?.toISOString()
         }
         
@@ -406,7 +409,7 @@ export function ProjectAccountsOptimized() {
   // 计算统计数据
   const totalBudget = projects?.reduce((sum, project) => sum + (project.budget || 0), 0) || 0
   const totalSpent = projects?.reduce((sum, project) => sum + (projectSpentAmounts?.[project.id!] || 0), 0) || 0
-  const totalRemaining = projects?.reduce((sum, project) => sum + (project.remaining || 0), 0) || 0
+  const totalRemaining = totalBudget - totalSpent
   const activeProjectsCount = projects?.filter((p) => p.status === "Active").length || 0
 
   // 加载状态
@@ -559,7 +562,7 @@ export function ProjectAccountsOptimized() {
                 <SelectItem value="all">所有年份</SelectItem>
                 {getAvailableProjectYears().map((year) => (
                   <SelectItem key={year} value={year}>
-                    {year}年
+                    {year}年{year === currentYear ? " (当前)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -595,6 +598,7 @@ export function ProjectAccountsOptimized() {
           <TabsTrigger value="overview">项目概览</TabsTrigger>
           <TabsTrigger value="bod-stats">BOD统计</TabsTrigger>
           <TabsTrigger value="budget">预算分析</TabsTrigger>
+          <TabsTrigger value="budget-vs-actual">预算vs实际</TabsTrigger>
           <TabsTrigger value="timeline">时间线</TabsTrigger>
         </TabsList>
 
@@ -680,8 +684,15 @@ export function ProjectAccountsOptimized() {
                           </TableCell>
                           <TableCell>${(project.budget || 0).toLocaleString()}</TableCell>
                           <TableCell>${spentAmount.toLocaleString()}</TableCell>
-                          <TableCell className={(project.remaining || 0) > 0 ? "text-green-600" : "text-red-600"}>
-                            ${(project.remaining || 0).toLocaleString()}
+                          <TableCell className={(() => {
+                            const spentAmount = projectSpentAmounts?.[project.id!] || 0
+                            const calculatedRemaining = (project.budget || 0) - spentAmount
+                            return calculatedRemaining > 0 ? "text-green-600" : "text-red-600"
+                          })()}>
+                            ${(() => {
+                              const spentAmount = projectSpentAmounts?.[project.id!] || 0
+                              return ((project.budget || 0) - spentAmount).toLocaleString()
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -841,6 +852,133 @@ export function ProjectAccountsOptimized() {
           </div>
         </TabsContent>
 
+        <TabsContent value="budget-vs-actual" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>预算vs实际支出对比</CardTitle>
+                <CardDescription>详细对比每个项目的预算和实际支出情况</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredProjects.map((project) => {
+                    const spentAmount = projectSpentAmounts?.[project.id!] || 0
+                    const budget = project.budget || 0
+                    const variance = spentAmount - budget
+                    const variancePercentage = budget > 0 ? (variance / budget) * 100 : 0
+                    const isOverBudget = spentAmount > budget
+                    
+                    return (
+                      <div key={project.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-medium">{project.name}</h3>
+                            <p className="text-sm text-muted-foreground">{project.projectid}</p>
+                          </div>
+                          <Badge variant={isOverBudget ? "destructive" : "default"}>
+                            {isOverBudget ? "超出预算" : "在预算内"}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">预算金额</p>
+                            <p className="font-medium">${budget.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">实际支出</p>
+                            <p className="font-medium">${spentAmount.toLocaleString()}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>差异</span>
+                            <span className={`font-medium ${isOverBudget ? "text-red-600" : "text-green-600"}`}>
+                              {isOverBudget ? "+" : ""}${variance.toLocaleString()} ({variancePercentage.toFixed(1)}%)
+                            </span>
+                          </div>
+                          <Progress 
+                            value={budget > 0 ? Math.min((spentAmount / budget) * 100, 200) : 0} 
+                            className={isOverBudget ? "bg-red-100" : ""}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>总体预算执行情况</CardTitle>
+                <CardDescription>所有项目的预算执行汇总</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* 总体统计 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-2xl font-bold text-blue-600">
+                        ${filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0).toLocaleString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">总预算</p>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-2xl font-bold text-green-600">
+                        ${filteredProjects.reduce((sum, p) => sum + (projectSpentAmounts?.[p.id!] || 0), 0).toLocaleString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">总支出</p>
+                    </div>
+                  </div>
+                  
+                  {/* 预算执行率 */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>预算执行率</span>
+                      <span className="font-medium">
+                        {(() => {
+                          const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)
+                          const totalSpent = filteredProjects.reduce((sum, p) => sum + (projectSpentAmounts?.[p.id!] || 0), 0)
+                          return totalBudget > 0 ? `${((totalSpent / totalBudget) * 100).toFixed(1)}%` : '0%'
+                        })()}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={(() => {
+                        const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0)
+                        const totalSpent = filteredProjects.reduce((sum, p) => sum + (projectSpentAmounts?.[p.id!] || 0), 0)
+                        return totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
+                      })()} 
+                    />
+                  </div>
+                  
+                  {/* 项目状态统计 */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium">项目状态分布</h4>
+                    <div className="space-y-2">
+                      {(() => {
+                        const overBudgetCount = filteredProjects.filter(p => (projectSpentAmounts?.[p.id!] || 0) > (p.budget || 0)).length
+                        const underBudgetCount = filteredProjects.filter(p => (projectSpentAmounts?.[p.id!] || 0) <= (p.budget || 0)).length
+                        return [
+                          { label: "超出预算", count: overBudgetCount, color: "text-red-600", bg: "bg-red-50" },
+                          { label: "在预算内", count: underBudgetCount, color: "text-green-600", bg: "bg-green-50" }
+                        ]
+                      })().map((stat, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 rounded">
+                          <span className="text-sm">{stat.label}</span>
+                          <span className={`font-medium ${stat.color}`}>{stat.count} 个项目</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         <TabsContent value="timeline" className="space-y-4">
           <Card>
             <CardHeader>
@@ -878,7 +1016,10 @@ export function ProjectAccountsOptimized() {
                     </div>
                     <div className="text-right">
                       <p className="font-medium">${(projectSpentAmounts?.[project.id!] || 0).toLocaleString()}</p>
-                      <p className="text-sm text-muted-foreground">of ${(project.budget || 0).toLocaleString()}</p>
+                      <p className="text-sm text-muted-foreground">
+                        of ${(project.budget || 0).toLocaleString()} 
+                        (剩余: ${((project.budget || 0) - (projectSpentAmounts?.[project.id!] || 0)).toLocaleString()})
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -891,10 +1032,10 @@ export function ProjectAccountsOptimized() {
           <Card>
             <CardHeader>
               <CardTitle>BOD分类统计</CardTitle>
-              <CardDescription>按BOD分类查看项目统计信息</CardDescription>
+              <CardDescription>按BOD分类查看项目统计信息{filters.projectYear !== "all" && ` (${filters.projectYear}年)`}</CardDescription>
             </CardHeader>
             <CardContent>
-              {projects && (
+              {filteredProjects && (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -909,7 +1050,7 @@ export function ProjectAccountsOptimized() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Object.entries(getProjectStatsByBOD(projects)).map(([category, stats]) => (
+                    {Object.entries(getProjectStatsByBOD(filteredProjects)).map(([category, stats]) => (
                       <TableRow key={category}>
                         <TableCell className="font-medium">
                           <Badge variant="outline">
@@ -919,8 +1060,14 @@ export function ProjectAccountsOptimized() {
                         <TableCell>{stats.count}</TableCell>
                         <TableCell>${(stats.totalBudget || 0).toLocaleString()}</TableCell>
                         <TableCell>${(stats.totalSpent || 0).toLocaleString()}</TableCell>
-                        <TableCell className={(stats.totalRemaining || 0) > 0 ? "text-green-600" : "text-red-600"}>
-                          ${(stats.totalRemaining || 0).toLocaleString()}
+                        <TableCell className={(() => {
+                          const calculatedRemaining = (stats.totalBudget || 0) - (stats.totalSpent || 0)
+                          return calculatedRemaining > 0 ? "text-green-600" : "text-red-600"
+                        })()}>
+                          ${(() => {
+                            const calculatedRemaining = (stats.totalBudget || 0) - (stats.totalSpent || 0)
+                            return calculatedRemaining.toLocaleString()
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Badge variant="default">{stats.activeCount}</Badge>

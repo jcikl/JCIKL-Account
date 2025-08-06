@@ -194,12 +194,38 @@ export function DashboardOverviewOptimized() {
   const { currentUser, hasPermission } = useAuth()
   const [refreshing, setRefreshing] = React.useState(false)
 
-  // 项目统计筛选状态
+  // 项目统计筛选状态 - 年份默认为当前年份
   const [projectStatsFilters, setProjectStatsFilters] = React.useState({
-    year: "all",
+    year: new Date().getFullYear().toString(),
     bodCategory: "all",
-    status: "all"
+    status: "all",
+    project: "all" // 新增项目筛选
   })
+
+  // 智能筛选更新函数
+  const updateProjectStatsFilters = React.useCallback((updates: Partial<typeof projectStatsFilters>) => {
+    setProjectStatsFilters(prev => {
+      const newFilters = { ...prev, ...updates }
+      
+      // 智能重置逻辑
+      // 如果年份改变，重置项目选择（因为项目可能不在新年份中）
+      if (updates.year && updates.year !== prev.year) {
+        newFilters.project = "all"
+      }
+      
+      // 如果BOD分类改变，重置项目选择（因为项目可能不在新BOD分类中）
+      if (updates.bodCategory && updates.bodCategory !== prev.bodCategory) {
+        newFilters.project = "all"
+      }
+      
+      // 如果状态改变，重置项目选择（因为项目可能不在新状态中）
+      if (updates.status && updates.status !== prev.status) {
+        newFilters.project = "all"
+      }
+      
+      return newFilters
+    })
+  }, [])
 
   // 使用优化的数据hooks
   const { 
@@ -299,19 +325,210 @@ export function DashboardOverviewOptimized() {
       )
     }
     
-    return calculateProjectStats(filteredProjects, transactions)
+    // 按项目筛选
+    if (projectStatsFilters.project !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.projectid === projectStatsFilters.project
+      )
+    }
+    
+    const stats = calculateProjectStats(filteredProjects, transactions)
+    
+    // 按BOD分组，然后按活动日期排序（如果活动日期为空则按项目名称排序）
+    const groupedByBOD = stats.reduce((groups, project) => {
+      const bodCategory = project.bodCategory || '未分类'
+      if (!groups[bodCategory]) {
+        groups[bodCategory] = []
+      }
+      groups[bodCategory].push(project)
+      return groups
+    }, {} as Record<string, typeof stats>)
+    
+    // 对每个BOD组内的项目进行排序
+    Object.keys(groupedByBOD).forEach(bodCategory => {
+      groupedByBOD[bodCategory].sort((a, b) => {
+        // 优先按活动日期排序（如果存在）
+        const aDate = a.eventDate ? new Date(typeof a.eventDate === 'string' ? a.eventDate : a.eventDate.seconds * 1000).getTime() : 0
+        const bDate = b.eventDate ? new Date(typeof b.eventDate === 'string' ? b.eventDate : b.eventDate.seconds * 1000).getTime() : 0
+        
+        if (aDate && bDate) {
+          return bDate - aDate // 降序排列，最新的在前
+        } else if (aDate && !bDate) {
+          return -1 // 有日期的排在前面
+        } else if (!aDate && bDate) {
+          return 1
+        } else {
+          // 如果都没有日期，按项目名称排序
+          return a.name.localeCompare(b.name)
+        }
+      })
+    })
+    
+    // 将分组后的项目展平为数组
+    return Object.values(groupedByBOD).flat()
   }, [calculateProjectStats, projects, transactions, projectStatsFilters])
 
-  // 获取可用项目年份
+  // 获取可用项目年份 - 根据当前筛选条件动态更新
   const getAvailableProjectYears = React.useCallback(() => {
     if (!projects) return []
+    
+    // 根据当前筛选条件过滤项目
+    let filteredProjects = projects
+    
+    // 按BOD分类筛选
+    if (projectStatsFilters.bodCategory !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.bodCategory === projectStatsFilters.bodCategory
+      )
+    }
+    
+    // 按状态筛选
+    if (projectStatsFilters.status !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.status === projectStatsFilters.status
+      )
+    }
+    
+    // 按项目筛选
+    if (projectStatsFilters.project !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.projectid === projectStatsFilters.project
+      )
+    }
+    
     const years = new Set<string>()
-    projects.forEach(project => {
+    filteredProjects.forEach(project => {
       const year = project.projectid?.split('_')[0]
       if (year) years.add(year)
     })
     return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))
-  }, [projects])
+  }, [projects, projectStatsFilters.bodCategory, projectStatsFilters.status, projectStatsFilters.project])
+
+  // 获取按BOD分组的项目选项 - 根据当前筛选条件动态更新
+  const getProjectsGroupedByBOD = React.useCallback(() => {
+    if (!projects) return []
+    
+    // 根据当前筛选条件过滤项目
+    let filteredProjects = projects
+    
+    // 按年份筛选
+    if (projectStatsFilters.year !== "all") {
+      filteredProjects = filteredProjects.filter(project => {
+        const projectYear = project.projectid?.split('_')[0]
+        return projectYear === projectStatsFilters.year
+      })
+    }
+    
+    // 按状态筛选
+    if (projectStatsFilters.status !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.status === projectStatsFilters.status
+      )
+    }
+    
+    // 按BOD分类分组项目
+    const groupedProjects = filteredProjects.reduce((acc, project) => {
+      const bodCategory = project.bodCategory
+      if (!acc[bodCategory]) {
+        acc[bodCategory] = []
+      }
+      acc[bodCategory].push(project)
+      return acc
+    }, {} as Record<string, Project[]>)
+    
+    // 转换为选项数组
+    const options: Array<{ group: string; projects: Project[] }> = []
+    
+    // BOD分类顺序
+    const bodOrder = ['P', 'VPI', 'VPE', 'VPM', 'VPPR', 'SAA', 'T', 'S']
+    
+    bodOrder.forEach(bod => {
+      if (groupedProjects[bod]) {
+        options.push({
+          group: bod,
+          projects: groupedProjects[bod].sort((a, b) => a.name.localeCompare(b.name))
+        })
+      }
+    })
+    
+    return options
+  }, [projects, projectStatsFilters.year, projectStatsFilters.status])
+
+  // 获取可用的BOD分类选项 - 根据当前筛选条件动态更新
+  const getAvailableBODCategories = React.useCallback(() => {
+    if (!projects) return []
+    
+    // 根据当前筛选条件过滤项目
+    let filteredProjects = projects
+    
+    // 按年份筛选
+    if (projectStatsFilters.year !== "all") {
+      filteredProjects = filteredProjects.filter(project => {
+        const projectYear = project.projectid?.split('_')[0]
+        return projectYear === projectStatsFilters.year
+      })
+    }
+    
+    // 按状态筛选
+    if (projectStatsFilters.status !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.status === projectStatsFilters.status
+      )
+    }
+    
+    // 按项目筛选
+    if (projectStatsFilters.project !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.projectid === projectStatsFilters.project
+      )
+    }
+    
+    const categories = new Set<string>()
+    filteredProjects.forEach(project => {
+      if (project.bodCategory) {
+        categories.add(project.bodCategory)
+      }
+    })
+    return Array.from(categories).sort()
+  }, [projects, projectStatsFilters.year, projectStatsFilters.status, projectStatsFilters.project])
+
+  // 获取可用的项目状态选项 - 根据当前筛选条件动态更新
+  const getAvailableProjectStatuses = React.useCallback(() => {
+    if (!projects) return []
+    
+    // 根据当前筛选条件过滤项目
+    let filteredProjects = projects
+    
+    // 按年份筛选
+    if (projectStatsFilters.year !== "all") {
+      filteredProjects = filteredProjects.filter(project => {
+        const projectYear = project.projectid?.split('_')[0]
+        return projectYear === projectStatsFilters.year
+      })
+    }
+    
+    // 按BOD分类筛选
+    if (projectStatsFilters.bodCategory !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.bodCategory === projectStatsFilters.bodCategory
+      )
+    }
+    
+    // 按项目筛选
+    if (projectStatsFilters.project !== "all") {
+      filteredProjects = filteredProjects.filter(project => 
+        project.projectid === projectStatsFilters.project
+      )
+    }
+    
+    const statuses = new Set<string>()
+    filteredProjects.forEach(project => {
+      if (project.status) {
+        statuses.add(project.status)
+      }
+    })
+    return Array.from(statuses).sort()
+  }, [projects, projectStatsFilters.year, projectStatsFilters.bodCategory, projectStatsFilters.project])
 
   // 优化的统计数据计算
   const dashboardStats = React.useMemo(() => {
@@ -360,27 +577,7 @@ export function DashboardOverviewOptimized() {
     ]
   }, [transactions, projects])
 
-  // 优化的项目列表
-  const activeProjects = React.useMemo(() => {
-    if (!projects || !projectSpentAmounts) return []
-    
-    return projects
-      .filter(p => p.status === "Active")
-      .slice(0, 6) // 只显示前6个活跃项目
-      .map(project => ({
-        project,
-        spentAmount: projectSpentAmounts[project.id!] || 0,
-        budget: project.budget || 0
-      }))
-  }, [projects, projectSpentAmounts])
 
-  // 优化的最近交易列表
-  const recentTransactions = React.useMemo(() => {
-    if (!transactions) return []
-    
-    return transactions
-      .slice(0, 5) // 只显示最近5笔交易
-  }, [transactions])
 
   // 优化的刷新数据函数
   const handleRefresh = React.useCallback(async () => {
@@ -453,15 +650,68 @@ export function DashboardOverviewOptimized() {
                   按项目统计的交易情况和财务表现
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700">
-                <PieChart className="h-3 w-3 mr-1" />
-                {projects.length} 个项目
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700">
+                  <PieChart className="h-3 w-3 mr-1" />
+                  {filteredProjectStats.length} / {projects.length} 个项目
+                </Badge>
+                {(projectStatsFilters.year !== "all" || 
+                  projectStatsFilters.bodCategory !== "all" || 
+                  projectStatsFilters.status !== "all" || 
+                  projectStatsFilters.project !== "all") && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700">
+                    筛选中
+                  </Badge>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-4">
             {/* 筛选控制面板 */}
             <div className="mb-4 p-4 bg-gray-50/50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              {/* 快速筛选按钮 */}
+              <div className="mb-3 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateProjectStatsFilters({ 
+                    year: new Date().getFullYear().toString(), 
+                    status: "Active",
+                    bodCategory: "all",
+                    project: "all"
+                  })}
+                  className="h-7 text-xs"
+                >
+                  当前年份活跃项目
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateProjectStatsFilters({ 
+                    year: "all", 
+                    status: "Active",
+                    bodCategory: "all",
+                    project: "all"
+                  })}
+                  className="h-7 text-xs"
+                >
+                  所有活跃项目
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateProjectStatsFilters({ 
+                    year: new Date().getFullYear().toString(), 
+                    status: "all",
+                    bodCategory: "all",
+                    project: "all"
+                  })}
+                  className="h-7 text-xs"
+                >
+                  当前年份所有项目
+                </Button>
+              </div>
+              
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <Label htmlFor="project-year-filter" className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
@@ -469,7 +719,7 @@ export function DashboardOverviewOptimized() {
                   </Label>
                   <Select 
                     value={projectStatsFilters.year} 
-                    onValueChange={(value) => setProjectStatsFilters(prev => ({ ...prev, year: value }))}
+                    onValueChange={(value) => updateProjectStatsFilters({ year: value })}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="选择年份" />
@@ -491,21 +741,25 @@ export function DashboardOverviewOptimized() {
                   </Label>
                   <Select 
                     value={projectStatsFilters.bodCategory} 
-                    onValueChange={(value) => setProjectStatsFilters(prev => ({ ...prev, bodCategory: value }))}
+                    onValueChange={(value) => updateProjectStatsFilters({ bodCategory: value })}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="选择BOD分类" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">所有分类</SelectItem>
-                      <SelectItem value="P">主席 (P)</SelectItem>
-                      <SelectItem value="VPI">副主席 (VPI)</SelectItem>
-                      <SelectItem value="VPE">副主席 (VPE)</SelectItem>
-                      <SelectItem value="VPM">副主席 (VPM)</SelectItem>
-                      <SelectItem value="VPPR">副主席 (VPPR)</SelectItem>
-                      <SelectItem value="SAA">秘书 (SAA)</SelectItem>
-                      <SelectItem value="T">财务 (T)</SelectItem>
-                      <SelectItem value="S">秘书 (S)</SelectItem>
+                      {getAvailableBODCategories().map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category === 'P' && '主席 (P)'}
+                          {category === 'VPI' && '副主席 (VPI)'}
+                          {category === 'VPE' && '副主席 (VPE)'}
+                          {category === 'VPM' && '副主席 (VPM)'}
+                          {category === 'VPPR' && '副主席 (VPPR)'}
+                          {category === 'SAA' && '秘书 (SAA)'}
+                          {category === 'T' && '财务 (T)'}
+                          {category === 'S' && '秘书 (S)'}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -516,16 +770,56 @@ export function DashboardOverviewOptimized() {
                   </Label>
                   <Select 
                     value={projectStatsFilters.status} 
-                    onValueChange={(value) => setProjectStatsFilters(prev => ({ ...prev, status: value }))}
+                    onValueChange={(value) => updateProjectStatsFilters({ status: value })}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="选择状态" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">所有状态</SelectItem>
-                      <SelectItem value="Active">进行中</SelectItem>
-                      <SelectItem value="Completed">已完成</SelectItem>
-                      <SelectItem value="On Hold">暂停</SelectItem>
+                      {getAvailableProjectStatuses().map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status === 'Active' && '进行中'}
+                          {status === 'Completed' && '已完成'}
+                          {status === 'On Hold' && '暂停'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex-1">
+                  <Label htmlFor="project-filter" className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    选择项目
+                  </Label>
+                  <Select 
+                    value={projectStatsFilters.project} 
+                    onValueChange={(value) => updateProjectStatsFilters({ project: value })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="选择项目" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">所有项目</SelectItem>
+                      {getProjectsGroupedByBOD().map((group) => (
+                        <div key={group.group}>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-gray-800">
+                            {group.group === 'P' && '主席 (P)'}
+                            {group.group === 'VPI' && '副主席 (VPI)'}
+                            {group.group === 'VPE' && '副主席 (VPE)'}
+                            {group.group === 'VPM' && '副主席 (VPM)'}
+                            {group.group === 'VPPR' && '副主席 (VPPR)'}
+                            {group.group === 'SAA' && '秘书 (SAA)'}
+                            {group.group === 'T' && '财务 (T)'}
+                            {group.group === 'S' && '秘书 (S)'}
+                          </div>
+                          {group.projects.map((project) => (
+                            <SelectItem key={project.id} value={project.projectid}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -534,7 +828,7 @@ export function DashboardOverviewOptimized() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setProjectStatsFilters({ year: "all", bodCategory: "all", status: "all" })}
+                    onClick={() => setProjectStatsFilters({ year: new Date().getFullYear().toString(), bodCategory: "all", status: "all", project: "all" })}
                     className="h-8 text-xs"
                   >
                     <X className="h-3 w-3 mr-1" />
@@ -631,55 +925,7 @@ export function DashboardOverviewOptimized() {
         </Card>
       )}
 
-      {/* 活跃项目 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            活跃项目
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {activeProjects.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {activeProjects.map(({ project, spentAmount, budget }) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  spentAmount={spentAmount}
-                  budget={budget}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              暂无活跃项目
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* 最近交易 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            最近交易
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {recentTransactions.map((transaction) => (
-              <TransactionItem key={transaction.id} transaction={transaction} />
-            ))}
-          </div>
-          {recentTransactions.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              暂无交易记录
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 } 

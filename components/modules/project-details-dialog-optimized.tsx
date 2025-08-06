@@ -144,6 +144,7 @@ const FilterOption = React.memo(({
 const EditableTransactionRow = React.memo(({ 
   transaction,
   categories,
+  projects,
   onEdit,
   onSave,
   onCancel,
@@ -153,6 +154,7 @@ const EditableTransactionRow = React.memo(({
 }: { 
   transaction: EditingTransaction
   categories: Category[]
+  projects: Project[]
   onEdit: (transaction: Transaction) => void
   onSave: (transaction: Transaction) => Promise<void>
   onCancel: (transaction: Transaction) => void
@@ -164,7 +166,9 @@ const EditableTransactionRow = React.memo(({
     description: transaction.description,
     category: transaction.category,
     income: transaction.income,
-    expense: transaction.expense
+    expense: transaction.expense,
+    projectid: transaction.projectid,
+    projectName: transaction.projectName
   })
   const [isSaving, setIsSaving] = React.useState(false)
 
@@ -187,7 +191,9 @@ const EditableTransactionRow = React.memo(({
       description: transaction.description,
       category: transaction.category,
       income: transaction.income,
-      expense: transaction.expense
+      expense: transaction.expense,
+      projectid: transaction.projectid,
+      projectName: transaction.projectName
     })
     onCancel(transaction)
   }
@@ -223,6 +229,36 @@ const EditableTransactionRow = React.memo(({
                   {category.name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+        <TableCell>
+          <Select 
+            value={editData.projectid || ''} 
+            onValueChange={(value) => {
+              const selectedProject = projects.find(p => p.projectid === value)
+              setEditData(prev => ({ 
+                ...prev, 
+                projectid: value,
+                projectName: selectedProject?.name || ''
+              }))
+            }}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="选择项目" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects
+                .filter(project => 
+                  project.status === 'Active' || // 显示活跃状态的项目
+                  project.projectid === editData.projectid // 或者当前选中的项目（即使不是活跃状态）
+                )
+                .map((project) => (
+                  <SelectItem key={project.id} value={project.projectid}>
+                    {project.name} ({project.projectid})
+                    {project.status !== 'Active' && ' - 已完成'}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </TableCell>
@@ -280,6 +316,11 @@ const EditableTransactionRow = React.memo(({
       <TableCell>
         <Badge variant="outline">{transaction.category}</Badge>
       </TableCell>
+      <TableCell>
+        <Badge variant="secondary">
+          {transaction.projectName || transaction.projectid || '未分配'}
+        </Badge>
+      </TableCell>
       <TableCell className="text-right text-green-600">
         ${transaction.income.toFixed(2)}
       </TableCell>
@@ -312,6 +353,7 @@ export function ProjectDetailsDialogOptimized({
   const [filteredTransactions, setFilteredTransactions] = React.useState<EditingTransaction[]>([])
   const [loading, setLoading] = React.useState(false)
   const [categories, setCategories] = React.useState<Category[]>([])
+  const [projects, setProjects] = React.useState<Project[]>([])
   const [stats, setStats] = React.useState<ProjectTransactionStats>({
     totalIncome: 0,
     totalExpense: 0,
@@ -344,6 +386,16 @@ export function ProjectDetailsDialogOptimized({
       setCategories(categoriesData)
     } catch (error) {
       console.error('加载分类数据失败:', error)
+    }
+  }, [])
+
+  // 加载项目数据
+  const loadProjects = React.useCallback(async () => {
+    try {
+      const projectsData = await getProjects()
+      setProjects(projectsData)
+    } catch (error) {
+      console.error('加载项目数据失败:', error)
     }
   }, [])
 
@@ -553,7 +605,9 @@ export function ProjectDetailsDialogOptimized({
         category: updatedTransaction.category,
         income: updatedTransaction.income,
         expense: updatedTransaction.expense,
-        date: updatedTransaction.date
+        date: updatedTransaction.date,
+        projectid: updatedTransaction.projectid,
+        projectName: updatedTransaction.projectName
       })
 
       setTransactions(prev => prev.map(t => 
@@ -630,7 +684,12 @@ export function ProjectDetailsDialogOptimized({
     setIsBatchEditing(true)
     try {
       const updatePromises = Array.from(selectedTransactions).map(async (transactionId) => {
-        await updateDocument('transactions', transactionId, batchEditData)
+        await updateDocument('transactions', transactionId, {
+          ...batchEditData,
+          // 确保项目户口参数被正确更新
+          projectid: batchEditData.projectid,
+          projectName: batchEditData.projectName
+        })
       })
 
       await Promise.all(updatePromises)
@@ -710,8 +769,9 @@ export function ProjectDetailsDialogOptimized({
     if (open && project) {
       loadProjectData()
       loadCategories()
+      loadProjects()
     }
-  }, [open, project, loadProjectData, loadCategories])
+  }, [open, project, loadProjectData, loadCategories, loadProjects])
 
   // 应用筛选
   React.useEffect(() => {
@@ -982,7 +1042,7 @@ export function ProjectDetailsDialogOptimized({
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div>
                       <Label>分类</Label>
                       <Select 
@@ -998,6 +1058,37 @@ export function ProjectDetailsDialogOptimized({
                               {category.name}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>项目户口</Label>
+                      <Select 
+                        value={batchEditData.projectid || ''} 
+                        onValueChange={(value) => {
+                          const selectedProject = projects.find(p => p.projectid === value)
+                          setBatchEditData(prev => ({ 
+                            ...prev, 
+                            projectid: value,
+                            projectName: selectedProject?.name || ''
+                          }))
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择项目" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {projects
+                            .filter(project => 
+                              project.status === 'Active' || // 显示活跃状态的项目
+                              project.projectid === batchEditData.projectid // 或者当前选中的项目（即使不是活跃状态）
+                            )
+                            .map((project) => (
+                              <SelectItem key={project.id} value={project.projectid}>
+                                {project.name} ({project.projectid})
+                                {project.status !== 'Active' && ' - 已完成'}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1069,13 +1160,14 @@ export function ProjectDetailsDialogOptimized({
                           </Button>
                         </TableHead>
                       )}
-                      <TableHead>日期</TableHead>
-                      <TableHead>描述</TableHead>
-                      <TableHead>分类</TableHead>
-                      <TableHead className="text-right">收入</TableHead>
-                      <TableHead className="text-right">支出</TableHead>
-                      <TableHead className="text-right">净额</TableHead>
-                      <TableHead className="w-24">操作</TableHead>
+                                      <TableHead>日期</TableHead>
+                <TableHead>描述</TableHead>
+                <TableHead>分类</TableHead>
+                <TableHead>项目户口</TableHead>
+                <TableHead className="text-right">收入</TableHead>
+                <TableHead className="text-right">支出</TableHead>
+                <TableHead className="text-right">净额</TableHead>
+                <TableHead className="w-24">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1084,6 +1176,7 @@ export function ProjectDetailsDialogOptimized({
                         key={transaction.id || `transaction-${index}-${transaction.date}-${transaction.description}`}
                         transaction={transaction}
                         categories={categories}
+                        projects={projects}
                         onEdit={handleEditTransaction}
                         onSave={handleSaveTransaction}
                         onCancel={handleCancelEdit}

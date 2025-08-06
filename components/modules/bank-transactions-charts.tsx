@@ -71,8 +71,17 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       }
     }
 
-    // 月度趋势数据 - 修正计算逻辑
+    // 月度趋势数据 - 确保显示12个月
     const monthlyData = new Map<string, { income: number; expense: number; net: number }>()
+    
+    // 获取当前年份
+    const currentYear = new Date().getFullYear()
+    
+    // 初始化12个月的数据
+    for (let month = 1; month <= 12; month++) {
+      const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`
+      monthlyData.set(monthKey, { income: 0, expense: 0, net: 0 })
+    }
     
     transactions.forEach(transaction => {
       const date = typeof transaction.date === 'string' 
@@ -80,15 +89,12 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
         : new Date(transaction.date.seconds * 1000)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       
-      if (!monthlyData.has(monthKey)) {
-        monthlyData.set(monthKey, { income: 0, expense: 0, net: 0 })
+      if (monthlyData.has(monthKey)) {
+        const data = monthlyData.get(monthKey)!
+        data.income += transaction.income || 0
+        data.expense += transaction.expense || 0
+        data.net = data.income - data.expense
       }
-      
-      const data = monthlyData.get(monthKey)!
-      // 使用正确的字段名称：income 和 expense
-      data.income += transaction.income || 0
-      data.expense += transaction.expense || 0
-      data.net = data.income - data.expense
     })
 
     const monthlyTrend = Array.from(monthlyData.entries())
@@ -269,8 +275,8 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
           <CardContent className="p-6">
             {/* 图表区域 */}
             <div className="mb-6">
-              <ChartContainer config={chartConfig} className="h-[300px]">
-                <AreaChart data={chartData.monthlyTrend}>
+              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                <BarChart data={chartData.monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                   <XAxis 
                     dataKey="monthShort" 
@@ -302,55 +308,40 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
                     }}
                   />
                   <Legend />
-                  <Area 
-                    type="monotone" 
+                  <Bar 
                     dataKey="income" 
-                    stackId="1" 
-                    stroke="#10b981" 
                     fill="#10b981" 
-                    fillOpacity={0.6}
                     name="收入"
+                    radius={[4, 4, 0, 0]}
                   />
-                  <Area 
-                    type="monotone" 
+                  <Bar 
                     dataKey="expense" 
-                    stackId="1" 
-                    stroke="#ef4444" 
                     fill="#ef4444" 
-                    fillOpacity={0.6}
                     name="支出"
+                    radius={[4, 4, 0, 0]}
                   />
-                </AreaChart>
+                </BarChart>
               </ChartContainer>
             </div>
 
-            {/* 月度数据表格 */}
-            <div className="grid gap-3">
+            {/* 月度数据表格 - 6列网格布局 */}
+            <div className="grid grid-cols-6 gap-2">
               {chartData.monthlyTrend.map((month, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-900 flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-blue-500" />
-                      {month.month}
+                <div key={index} className="p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="text-center">
+                    <div className="font-semibold text-gray-900 text-xs mb-2">
+                      {month.monthShort}
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      净额: <span className={`font-medium ${month.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(month.net)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex space-x-6 text-sm">
-                    <div className="text-center">
-                      <div className="text-green-600 font-semibold">
+                    <div className="space-y-1">
+                      <div className="text-green-600 font-medium text-xs">
                         {formatCurrency(month.income)}
                       </div>
-                      <div className="text-gray-500 text-xs">收入</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-red-600 font-semibold">
+                      <div className="text-red-600 font-medium text-xs">
                         {formatCurrency(month.expense)}
                       </div>
-                      <div className="text-gray-500 text-xs">支出</div>
+                      <div className={`text-xs font-medium ${month.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        净: {formatCurrency(month.net)}
+                      </div>
                     </div>
                   </div>
                 </div>
