@@ -1,3 +1,18 @@
+// Mock Firebase modules
+jest.mock('firebase/app', () => ({
+  initializeApp: jest.fn(() => ({ name: 'test-app' })),
+  getApps: jest.fn(() => []),
+  getApp: jest.fn(() => ({ name: 'test-app' }))
+}))
+
+jest.mock('firebase/firestore', () => ({
+  getFirestore: jest.fn(() => ({ name: 'test-db' }))
+}))
+
+jest.mock('firebase/auth', () => ({
+  getAuth: jest.fn(() => ({ name: 'test-auth' }))
+}))
+
 import { app, db, auth } from '@/lib/firebase'
 
 describe('Firebase Configuration', () => {

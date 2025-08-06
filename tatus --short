@@ -1,5 +1,0 @@
-[33m2b01b93[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Remove login page and update line endings
-[33m6d6b99a[m Add batch edit demo page and update project accounts
-[33m1ef45f5[m Add batch edit demo page and update project accounts
-[33mddcf885[m Comment out console.log statements in firebase-utils.ts for cleaner production output
-[33m90d3397[m Fix build issues: Add client-side directives and localStorage SSR protection

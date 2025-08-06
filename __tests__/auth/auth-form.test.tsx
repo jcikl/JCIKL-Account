@@ -4,6 +4,25 @@ import userEvent from '@testing-library/user-event'
 import { AuthForm } from '@/components/auth/auth-form'
 import { AuthProvider } from '@/components/auth/auth-context'
 
+// Mock the mock auth
+jest.mock('@/lib/mock-auth', () => ({
+  mockAuth: {
+    signInWithEmailAndPassword: jest.fn(),
+    createUserWithEmailAndPassword: jest.fn(),
+    signOut: jest.fn(),
+    onAuthStateChanged: jest.fn(),
+    isExpired: jest.fn(() => false),
+    getCurrentUser: jest.fn(() => null),
+    isAuthenticated: jest.fn(() => false),
+    refreshAuth: jest.fn()
+  },
+  MOCK_CREDENTIALS: {
+    admin: { email: 'admin@jcikl.com', password: 'admin123' },
+    user: { email: 'user@jcikl.com', password: 'user123' },
+    manager: { email: 'manager@jcikl.com', password: 'manager123' },
+  }
+}))
+
 // Mock the auth context
 const mockLogin = jest.fn()
 const mockSignup = jest.fn()

@@ -56,7 +56,7 @@ describe('Firebase Utils', () => {
       expect(collection).toHaveBeenCalledWith({}, 'users')
       expect(query).toHaveBeenCalledWith('users-collection', 'users-where')
       expect(where).toHaveBeenCalledWith('uid', '==', 'test-uid')
-      expect(result).toEqual(mockUserProfile)
+      expect(result).toEqual({ ...mockUserProfile, id: 'test-uid' })
     })
 
     it('should return null when user does not exist', async () => {
@@ -89,7 +89,6 @@ describe('Firebase Utils', () => {
     it('should get users successfully', async () => {
       const mockUsers = [
         { 
-          id: '1', 
           uid: 'user1', 
           email: 'user1@example.com', 
           displayName: 'User 1', 
@@ -98,7 +97,6 @@ describe('Firebase Utils', () => {
           lastLogin: '2024-01-01T00:00:00.000Z',
         },
         { 
-          id: '2', 
           uid: 'user2', 
           email: 'user2@example.com', 
           displayName: 'User 2', 
@@ -112,7 +110,7 @@ describe('Firebase Utils', () => {
       collection.mockReturnValue('users-collection')
       getDocs.mockResolvedValue({
         docs: mockUsers.map(user => ({
-          id: user.id,
+          id: user.uid,
           data: () => user,
         })),
       })
@@ -120,13 +118,12 @@ describe('Firebase Utils', () => {
       const result = await getUsers()
 
       expect(collection).toHaveBeenCalledWith({}, 'users')
-      expect(result).toEqual(mockUsers)
+      expect(result).toEqual(mockUsers.map(user => ({ ...user, id: user.uid })))
     })
 
     it('should get transactions successfully', async () => {
       const mockTransactions = [
         { 
-          id: '1', 
           amount: '+$100.00', 
           description: 'Transaction 1',
           date: '2024-01-01',
@@ -137,7 +134,6 @@ describe('Firebase Utils', () => {
           createdByUid: 'user1',
         },
         { 
-          id: '2', 
           amount: '+$200.00', 
           description: 'Transaction 2',
           date: '2024-01-02',
@@ -152,8 +148,8 @@ describe('Firebase Utils', () => {
       const { collection, getDocs } = require('firebase/firestore')
       collection.mockReturnValue('transactions-collection')
       getDocs.mockResolvedValue({
-        docs: mockTransactions.map(transaction => ({
-          id: transaction.id,
+        docs: mockTransactions.map((transaction, index) => ({
+          id: `transaction-${index + 1}`,
           data: () => transaction,
         })),
       })
@@ -161,7 +157,10 @@ describe('Firebase Utils', () => {
       const result = await getTransactions()
 
       expect(collection).toHaveBeenCalledWith({}, 'transactions')
-      expect(result).toEqual(mockTransactions)
+      expect(result).toEqual(mockTransactions.map((transaction, index) => ({ 
+        ...transaction, 
+        id: `transaction-${index + 1}` 
+      })))
     })
   })
 }) 
