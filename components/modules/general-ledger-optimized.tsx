@@ -18,7 +18,7 @@ import type { Account, Transaction } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
 import { AccountChartOptimized } from "./account-chart-optimized"
-import { GLSettingsManagement } from "./gl-settings-management"
+import { GlSettingsManagement } from "./gl-settings-management"
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 
@@ -614,7 +614,7 @@ export function GeneralLedgerOptimized() {
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
-          <GLSettingsManagement />
+          <GlSettingsManagement />
         </TabsContent>
       </Tabs>
     </div>

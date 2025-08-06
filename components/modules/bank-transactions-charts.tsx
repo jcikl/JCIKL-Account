@@ -62,7 +62,7 @@ interface ChartData {
 
 export function BankTransactionsCharts({ transactions, bankAccount, className }: BankTransactionsChartsProps) {
   const chartData = useMemo((): ChartData => {
-    if (!transactions.length) {
+    if (!transactions?.length) {
       return {
         monthlyTrend: [],
         categoryDistribution: [],
@@ -176,8 +176,8 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
     }
   }, [transactions])
 
-  const totalIncome = chartData.monthlyTrend.reduce((sum, month) => sum + month.income, 0)
-  const totalExpense = chartData.monthlyTrend.reduce((sum, month) => sum + month.expense, 0)
+  const totalIncome = chartData.monthlyTrend?.reduce((sum, month) => sum + month.income, 0)
+  const totalExpense = chartData.monthlyTrend?.reduce((sum, month) => sum + month.expense, 0)
   const netAmount = totalIncome - totalExpense
 
   // 图表配置
@@ -247,7 +247,7 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       </div>
 
       {/* 月度趋势 - 增强版 */}
-      {chartData.monthlyTrend.length > 0 && (
+      {chartData.monthlyTrend?.length > 0 && (
         <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
           <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
             <div className="flex items-center justify-between">
@@ -361,7 +361,7 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       )}
 
       {/* 分类分布 */}
-      {chartData.categoryDistribution.length > 0 && (
+      {chartData.categoryDistribution?.length > 0 && (
         <Card className="relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/10 dark:to-indigo-950/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
           <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 relative">
@@ -428,7 +428,7 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center bg-white/80 dark:bg-gray-900/80 rounded-full p-2 shadow-sm">
                       <div className="text-lg font-bold text-foreground">
-                        {chartData.categoryDistribution.length}
+                        {chartData.categoryDistribution?.length}
                       </div>
                       <div className="text-xs text-muted-foreground">分类</div>
                     </div>
@@ -530,12 +530,12 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
               })}
               
               {/* Summary Stats */}
-              {chartData.categoryDistribution.length > 0 && (
+              {chartData.categoryDistribution?.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-dashed">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border border-blue-200/50 dark:border-blue-800/50 hover:shadow-md transition-shadow">
                       <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {chartData.categoryDistribution.length}
+                        {chartData.categoryDistribution?.length}
                       </div>
                       <div className="text-sm text-muted-foreground font-medium">分类总数</div>
                     </div>
@@ -566,7 +566,7 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       )}
 
       {/* 项目统计 */}
-      {chartData.projectStats.length > 0 && (
+      {chartData.projectStats?.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>项目统计</CardTitle>
@@ -593,7 +593,7 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       )}
 
       {/* 状态分布 */}
-      {chartData.statusDistribution.length > 0 && (
+      {chartData.statusDistribution?.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>状态分布</CardTitle>

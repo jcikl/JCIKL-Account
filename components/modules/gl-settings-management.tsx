@@ -9,7 +9,7 @@ import type { Account, GlobalGLSettings } from "@/lib/data"
 import { useAuth } from "@/components/auth/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
-export function GLSettingsManagement() {
+export function GlSettingsManagement() {
   const { currentUser } = useAuth()
   const { toast } = useToast()
   
@@ -346,3 +346,4 @@ export function GLSettingsManagement() {
     </div>
   )
 } 
+export default GlSettingsManagement; 

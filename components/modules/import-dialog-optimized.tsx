@@ -711,3 +711,6 @@ export function ImportDialogEnhanced({
     </Dialog>
   )
 }
+
+export const ImportDialogOptimized = ImportDialogEnhanced;
+export default ImportDialogOptimized;

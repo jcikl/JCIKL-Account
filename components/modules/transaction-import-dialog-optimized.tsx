@@ -650,3 +650,5 @@ export function TransactionImportDialogOptimized({
     </Dialog>
   )
 } 
+
+export default TransactionImportDialogOptimized; 
