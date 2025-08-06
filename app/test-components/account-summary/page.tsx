@@ -16,7 +16,10 @@ export default function TestAccountSummaryPage() {
       </div>
       
       <div className="border rounded-lg p-4 bg-gray-50">
-        <AccountSummaryOptimized />
+        <AccountSummaryOptimized 
+          accounts={[]}
+          onRefresh={() => {}}
+        />
       </div>
     </div>
   )

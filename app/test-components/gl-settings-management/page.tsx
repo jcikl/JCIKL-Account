@@ -1,6 +1,6 @@
 "use client"
 
-import { GlSettingsManagement } from "@/components/modules/gl-settings-management"
+import { GLSettingsManagement } from "@/components/modules/gl-settings-management"
 
 export default function TestGlSettingsManagementPage() {
   return (
@@ -16,7 +16,7 @@ export default function TestGlSettingsManagementPage() {
       </div>
       
       <div className="border rounded-lg p-4 bg-gray-50">
-        <GlSettingsManagement />
+        <GLSettingsManagement />
       </div>
     </div>
   )

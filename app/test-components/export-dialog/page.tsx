@@ -16,7 +16,15 @@ export default function TestExportDialogPage() {
       </div>
       
       <div className="border rounded-lg p-4 bg-gray-50">
-        <ExportDialogOptimized />
+        <ExportDialogOptimized 
+          open={true}
+          onOpenChange={() => {}}
+          accounts={[]}
+          selectedAccounts={new Set()}
+          selectedCount={0}
+          totalCount={0}
+          onExport={() => {}}
+        />
       </div>
     </div>
   )
