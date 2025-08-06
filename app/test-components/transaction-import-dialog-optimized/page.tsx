@@ -16,7 +16,12 @@ export default function TestTransactionImportDialogOptimizedPage() {
       </div>
       
       <div className="border rounded-lg p-4 bg-gray-50">
-        <TransactionImportDialogOptimized />
+        <TransactionImportDialogOptimized 
+          open={true}
+          onOpenChange={() => {}}
+          existingTransactions={[]}
+          onImport={() => {}}
+        />
       </div>
     </div>
   )

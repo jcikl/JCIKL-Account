@@ -1,6 +1,6 @@
 "use client"
 
-import { ImportDialogOptimized } from "@/components/modules/import-dialog-optimized"
+import { ImportDialogEnhanced } from "@/components/modules/import-dialog-optimized"
 
 export default function TestImportDialogOptimizedPage() {
   return (
@@ -16,7 +16,7 @@ export default function TestImportDialogOptimizedPage() {
       </div>
       
       <div className="border rounded-lg p-4 bg-gray-50">
-        <ImportDialogOptimized />
+        <ImportDialogEnhanced />
       </div>
     </div>
   )

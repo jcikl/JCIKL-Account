@@ -352,6 +352,18 @@ export function TransactionImportDialogOptimized({
     { value: "excel", label: "Excel", description: "Excel表格格式" }
   ], [])
 
+  // 优化的有效交易列表
+  const validTransactions = React.useMemo(() => 
+    parsedTransactions.filter(transaction => transaction.isValid), 
+    [parsedTransactions]
+  )
+
+  // 优化的无效交易列表
+  const invalidTransactions = React.useMemo(() => 
+    parsedTransactions.filter(transaction => !transaction.isValid), 
+    [parsedTransactions]
+  )
+
   // 优化的统计数据
   const stats = React.useMemo(() => {
     const total = parsedTransactions.length
@@ -374,19 +386,7 @@ export function TransactionImportDialogOptimized({
       totalExpense,
       netAmount
     }
-  }, [parsedTransactions])
-
-  // 优化的有效交易列表
-  const validTransactions = React.useMemo(() => 
-    parsedTransactions.filter(transaction => transaction.isValid), 
-    [parsedTransactions]
-  )
-
-  // 优化的无效交易列表
-  const invalidTransactions = React.useMemo(() => 
-    parsedTransactions.filter(transaction => !transaction.isValid), 
-    [parsedTransactions]
-  )
+  }, [parsedTransactions, validTransactions])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
