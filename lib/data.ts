@@ -75,7 +75,8 @@ export interface BankAccount {
   name: string // 银行账户名称，例如："工商银行主账户"
   accountNumber?: string // 银行账号
   bankName?: string // 银行名称
-  balance: number // 账户余额
+  balance: number // 当前账户余额（计算得出：初始余额 + 所有交易净额）
+  initialBalance: number // 初始余额（手动设置的账户期初余额）
   currency: string // 货币类型，默认"CNY"
   isActive: boolean // 是否启用
   createdAt: string
@@ -108,6 +109,7 @@ export const DEFAULT_BANK_ACCOUNTS: Omit<BankAccount, "id" | "createdAt" | "upda
     bankName: "中国工商银行",
     accountNumber: "6222********1234",
     balance: 0,
+    initialBalance: 0,
     currency: "CNY",
     isActive: true
   },
@@ -116,6 +118,7 @@ export const DEFAULT_BANK_ACCOUNTS: Omit<BankAccount, "id" | "createdAt" | "upda
     bankName: "中国建设银行", 
     accountNumber: "6217********5678",
     balance: 0,
+    initialBalance: 0,
     currency: "CNY",
     isActive: true
   },
@@ -124,6 +127,7 @@ export const DEFAULT_BANK_ACCOUNTS: Omit<BankAccount, "id" | "createdAt" | "upda
     bankName: "中国农业银行",
     accountNumber: "6228********9012", 
     balance: 0,
+    initialBalance: 0,
     currency: "CNY",
     isActive: true
   },
@@ -132,6 +136,7 @@ export const DEFAULT_BANK_ACCOUNTS: Omit<BankAccount, "id" | "createdAt" | "upda
     bankName: "马来西亚银行",
     accountNumber: "1234********5678",
     balance: 0,
+    initialBalance: 0,
     currency: "MYR",
     isActive: true
   }

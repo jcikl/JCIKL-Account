@@ -40,7 +40,7 @@ interface ParsedTransaction {
   income: number
   status: "Completed" | "Pending" | "Draft"
   payer?: string
-  projectid?: string
+  projectname?: string
   category?: string
   bankAccountId?: string
   bankAccountName?: string
@@ -200,31 +200,31 @@ export function PasteImportDialog({
         }
 
         // 智能解析字段 - 支持三种格式
-        let dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category
+        let dateStr, description, description2, expenseStr, incomeStr, payer, projectname, category
         
         if (fields.length >= 9) {
-          // 完整格式：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目户口(可选),分类(可选)
-          [dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category] = fields
+          // 完整格式：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目名称(可选),分类(可选)
+          [dateStr, description, description2, expenseStr, incomeStr, payer, projectname, category] = fields
         } else if (fields.length >= 8) {
-          // 完整格式（有空字段）：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目户口(可选),分类(可选)
-          [dateStr, description, description2, expenseStr, incomeStr, payer, projectid, category] = fields
+          // 完整格式（有空字段）：日期,描述,描述2,支出金额,收入金额,付款人(可选),项目名称(可选),分类(可选)
+          [dateStr, description, description2, expenseStr, incomeStr, payer, projectname, category] = fields
         } else if (fields.length >= 6) {
-          // 简化格式：日期,描述,支出金额,收入金额,项目户口(可选),分类(可选)
-          [dateStr, description, expenseStr, incomeStr, projectid, category] = fields
+          // 简化格式：日期,描述,支出金额,收入金额,项目名称(可选),分类(可选)
+          [dateStr, description, expenseStr, incomeStr, projectname, category] = fields
           description2 = "" // 描述2为空
           payer = "" // 付款人为空
         } else if (fields.length >= 5) {
           // 最小格式：日期,描述,描述2(可选),支出金额,收入金额(可选)
           [dateStr, description, description2, expenseStr, incomeStr] = fields
           payer = "" // 付款人为空
-          projectid = "" // 默认项目户口
+          projectname = "" // 默认项目名称
           category = "" // 默认分类
         } else if (fields.length >= 4) {
           // 更小格式：日期,描述,支出金额,收入金额
           [dateStr, description, expenseStr, incomeStr] = fields
           description2 = "" // 描述2为空
           payer = "" // 付款人为空
-          projectid = "" // 默认项目户口
+          projectname = "" // 默认项目名称
           category = "" // 默认分类
         } else {
           // 字段严重不足的情况
@@ -234,7 +234,7 @@ export function PasteImportDialog({
           expenseStr = fields[3] || ""
           incomeStr = fields[4] || ""
           payer = "" // 付款人为空
-          projectid = "" // 默认项目户口
+          projectname = "" // 默认项目名称
           category = "" // 默认分类
           
           if (fields.length < 3) {
@@ -312,7 +312,7 @@ export function PasteImportDialog({
           income,
           status: "Completed" as const,
           payer: payer || "",
-          projectid: projectid || "",
+          projectname: projectname || "",
           category: category || "",
           bankAccountId: selectedBankAccountId,
           bankAccountName: selectedAccount?.name || "",

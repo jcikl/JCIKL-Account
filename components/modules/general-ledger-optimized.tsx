@@ -19,6 +19,7 @@ import { useAuth } from "@/components/auth/auth-context"
 import { RoleLevels, UserRoles } from "@/lib/data"
 import { AccountChartOptimized } from "./account-chart-optimized"
 import { GlSettingsManagement } from "./gl-settings-management"
+import { calculateMultipleAccountBalances } from "@/lib/firebase-utils"
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 
@@ -66,32 +67,188 @@ const TransactionRow = React.memo(({ transaction }: { transaction: Transaction }
          prevProps.transaction.income === nextProps.transaction.income
 })
 
-// 优化的统计卡片组件
+// 优化的统计卡片组件（支持实时余额计算）
 const StatCard = React.memo(({ type, accounts }: { type: string; accounts: Account[] }) => {
   const accountsOfType = React.useMemo(() => 
     accounts.filter((account) => account.type === type), 
     [accounts, type]
   )
   
-  const totalBalance = React.useMemo(() => 
-    accountsOfType.reduce((sum, account) => sum + account.balance, 0), 
-    [accountsOfType]
-  )
+  const [calculatedBalances, setCalculatedBalances] = React.useState<Map<string, number>>(new Map())
+  const [isCalculating, setIsCalculating] = React.useState(false)
+  const [useRealTimeCalculation, setUseRealTimeCalculation] = React.useState(false)
+  
+  // 实时计算余额
+  const calculateRealTimeBalances = React.useCallback(async () => {
+    if (accountsOfType.length === 0) return
+    
+    setIsCalculating(true)
+    try {
+      const accountIds = accountsOfType.map(account => account.id!).filter(Boolean)
+      const balances = await calculateMultipleAccountBalances(accountIds)
+      setCalculatedBalances(balances)
+      setUseRealTimeCalculation(true)
+    } catch (error) {
+      console.error('实时余额计算失败:', error)
+      // 发生错误时，回退到使用存储的余额
+      setUseRealTimeCalculation(false)
+    } finally {
+      setIsCalculating(false)
+    }
+  }, [accountsOfType])
+  
+  // 计算总余额
+  const totalBalance = React.useMemo(() => {
+    if (useRealTimeCalculation && calculatedBalances.size > 0) {
+      // 使用实时计算的余额
+      return accountsOfType.reduce((sum, account) => {
+        const calculatedBalance = calculatedBalances.get(account.id!) ?? account.balance
+        return sum + calculatedBalance
+      }, 0)
+    } else {
+      // 使用存储的余额
+      return accountsOfType.reduce((sum, account) => sum + account.balance, 0)
+    }
+  }, [accountsOfType, calculatedBalances, useRealTimeCalculation])
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{type} 账户</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">{type} 账户</CardTitle>
+          <div className="flex items-center gap-2">
+            {useRealTimeCalculation && (
+              <Badge variant="secondary" className="text-xs">实时</Badge>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={calculateRealTimeBalances}
+              disabled={isCalculating}
+              className="h-6 w-6 p-0"
+              title="重新计算实时余额"
+            >
+              {isCalculating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <DollarSign className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">${totalBalance.toLocaleString()}</div>
-        <p className="text-xs text-muted-foreground">{accountsOfType.length} 个账户</p>
+        <p className="text-xs text-muted-foreground">
+          {accountsOfType.length} 个账户
+          {useRealTimeCalculation && (
+            <span className="ml-2 text-green-600">• 实时计算</span>
+          )}
+        </p>
       </CardContent>
     </Card>
   )
 }, (prevProps, nextProps) => {
   return prevProps.type === nextProps.type && 
-         prevProps.accounts.length === nextProps.accounts.length
+         prevProps.accounts.length === nextProps.accounts.length &&
+         JSON.stringify(prevProps.accounts) === JSON.stringify(nextProps.accounts)
+})
+
+// 账户摘要表格组件（支持实时余额计算）
+const AccountSummaryTable = React.memo(({ accounts }: { accounts: Account[] }) => {
+  const [calculatedBalances, setCalculatedBalances] = React.useState<Map<string, number>>(new Map())
+  const [isCalculating, setIsCalculating] = React.useState(false)
+  const [useRealTimeCalculation, setUseRealTimeCalculation] = React.useState(false)
+  
+  // 实时计算所有账户余额
+  const calculateAllBalances = React.useCallback(async () => {
+    if (!accounts || accounts.length === 0) return
+    
+    setIsCalculating(true)
+    try {
+      const accountIds = accounts.map(account => account.id!).filter(Boolean)
+      const balances = await calculateMultipleAccountBalances(accountIds)
+      setCalculatedBalances(balances)
+      setUseRealTimeCalculation(true)
+    } catch (error) {
+      console.error('批量余额计算失败:', error)
+      setUseRealTimeCalculation(false)
+    } finally {
+      setIsCalculating(false)
+    }
+  }, [accounts])
+  
+  // 获取账户余额（实时或存储的）
+  const getAccountBalance = React.useCallback((account: Account): number => {
+    if (useRealTimeCalculation && calculatedBalances.has(account.id!)) {
+      return calculatedBalances.get(account.id!) ?? account.balance
+    }
+    return account.balance
+  }, [calculatedBalances, useRealTimeCalculation])
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>按账户类型划分的账户余额</CardTitle>
+            <CardDescription>按账户类型分组的账户余额摘要</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {useRealTimeCalculation && (
+              <Badge variant="secondary">实时计算</Badge>
+            )}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={calculateAllBalances}
+              disabled={isCalculating}
+            >
+              {isCalculating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  计算中...
+                </>
+              ) : (
+                <>
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  实时计算
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>账户类型</TableHead>
+              <TableHead className="text-right">账户数量</TableHead>
+              <TableHead className="text-right">总余额</TableHead>
+              <TableHead className="text-right">平均余额</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {["Asset", "Liability", "Equity", "Revenue", "Expense"].map((type) => {
+              const accountsOfType = accounts?.filter((account) => account.type === type) || []
+              const totalBalance = accountsOfType.reduce((sum, account) => sum + getAccountBalance(account), 0)
+              const averageBalance = accountsOfType.length > 0 ? totalBalance / accountsOfType.length : 0
+
+              return (
+                <TableRow key={type}>
+                  <TableCell className="font-medium">{type}</TableCell>
+                  <TableCell className="text-right">{accountsOfType.length}</TableCell>
+                  <TableCell className="text-right font-mono">${totalBalance.toLocaleString()}</TableCell>
+                  <TableCell className="text-right font-mono">${averageBalance.toLocaleString()}</TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
 })
 
 export function GeneralLedgerOptimized() {
@@ -590,40 +747,7 @@ export function GeneralLedgerOptimized() {
             ))}
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>按账户类型划分的账户余额</CardTitle>
-              <CardDescription>按账户类型分组的账户余额摘要</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>账户类型</TableHead>
-                    <TableHead className="text-right">账户数量</TableHead>
-                    <TableHead className="text-right">总余额</TableHead>
-                    <TableHead className="text-right">平均余额</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {["Asset", "Liability", "Equity", "Revenue", "Expense"].map((type) => {
-                    const accountsOfType = accounts?.filter((account) => account.type === type) || []
-                    const totalBalance = accountsOfType.reduce((sum, account) => sum + account.balance, 0)
-                    const averageBalance = accountsOfType.length > 0 ? totalBalance / accountsOfType.length : 0
-
-                    return (
-                      <TableRow key={type}>
-                        <TableCell className="font-medium">{type}</TableCell>
-                        <TableCell className="text-right">{accountsOfType.length}</TableCell>
-                        <TableCell className="text-right font-mono">${totalBalance.toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono">${averageBalance.toLocaleString()}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <AccountSummaryTable accounts={accounts || []} />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">

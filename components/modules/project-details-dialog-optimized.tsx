@@ -318,7 +318,7 @@ const EditableTransactionRow = React.memo(({
       </TableCell>
       <TableCell>
         <Badge variant="secondary">
-          {transaction.projectName || transaction.projectid || '未分配'}
+          {transaction.projectName || transaction.projectid || '-'}
         </Badge>
       </TableCell>
       <TableCell className="text-right text-green-600">

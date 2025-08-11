@@ -71,18 +71,35 @@ export function BankTransactionsCharts({ transactions, bankAccount, className }:
       }
     }
 
-    // 月度趋势数据 - 确保显示12个月
+    // 月度趋势数据 - 根据筛选后的交易动态生成
     const monthlyData = new Map<string, { income: number; expense: number; net: number }>()
     
-    // 获取当前年份
-    const currentYear = new Date().getFullYear()
+    // 获取筛选后交易涉及的所有年月
+    const yearMonthSet = new Set<string>()
     
-    // 初始化12个月的数据
-    for (let month = 1; month <= 12; month++) {
-      const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`
-      monthlyData.set(monthKey, { income: 0, expense: 0, net: 0 })
+    transactions.forEach(transaction => {
+      const date = typeof transaction.date === 'string' 
+        ? new Date(transaction.date) 
+        : new Date(transaction.date.seconds * 1000)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      yearMonthSet.add(monthKey)
+    })
+    
+    // 如果没有交易数据，显示当前年份的12个月
+    if (yearMonthSet.size === 0) {
+      const currentYear = new Date().getFullYear()
+      for (let month = 1; month <= 12; month++) {
+        const monthKey = `${currentYear}-${String(month).padStart(2, '0')}`
+        yearMonthSet.add(monthKey)
+      }
     }
     
+    // 初始化所有相关年月的数据
+    yearMonthSet.forEach(monthKey => {
+      monthlyData.set(monthKey, { income: 0, expense: 0, net: 0 })
+    })
+    
+    // 填充实际的交易数据
     transactions.forEach(transaction => {
       const date = typeof transaction.date === 'string' 
         ? new Date(transaction.date) 

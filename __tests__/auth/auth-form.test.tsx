@@ -115,24 +115,23 @@ describe('AuthForm', () => {
       const toggleButton = screen.getByText('注册')
       await user.click(toggleButton)
       
-      // Fill form
+      // Fill form (role is already set to default 'assistant_vice_president')
       const displayNameInput = screen.getByLabelText('显示名称')
       const emailInput = screen.getByLabelText('邮箱')
       const passwordInput = screen.getByLabelText('密码')
-      const roleSelect = screen.getByLabelText('角色')
       const submitButton = screen.getByRole('button', { name: '注册' })
       
       await user.type(displayNameInput, 'Test User')
       await user.type(emailInput, 'newuser@example.com')
       await user.type(passwordInput, 'newpassword123')
-      await user.selectOptions(roleSelect, 'ASSISTANT_VICE_PRESIDENT')
+      
       await user.click(submitButton)
       
       expect(mockSignup).toHaveBeenCalledWith(
         'newuser@example.com',
         'newpassword123',
         'Test User',
-        'ASSISTANT_VICE_PRESIDENT'
+        'assistant_vice_president'
       )
     })
   })

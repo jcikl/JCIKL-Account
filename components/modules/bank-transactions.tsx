@@ -1381,7 +1381,7 @@ export function BankTransactions() {
     income: number
     status: "Completed" | "Pending" | "Draft"
     payer?: string
-    projectid?: string
+    projectname?: string
     category?: string
     isValid: boolean
     errors: string[]
@@ -1468,11 +1468,11 @@ export function BankTransactions() {
           transactionData.payer = parsed.payer
         }
 
-        // 只有当projectid有值时才添加
-        if (parsed.projectid && parsed.projectid.trim()) {
-          transactionData.projectid = parsed.projectid
+        // 只有当projectname有值时才添加
+        if (parsed.projectname && parsed.projectname.trim()) {
+          transactionData.projectid = parsed.projectname
           // 同时设置项目名称
-          transactionData.projectName = extractProjectName(parsed.projectid)
+          transactionData.projectName = parsed.projectname
         }
 
         // 只有当category有值时才添加

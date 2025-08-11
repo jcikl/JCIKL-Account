@@ -19,7 +19,8 @@ import {
   CheckSquare,
   Square,
   Calendar,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -53,6 +54,7 @@ import {
   getBankAccounts, 
   getTransactionsByBankAccount,
   addTransactionWithBankAccount,
+  addTransactionWithAutoJournalEntry,
   deleteDocument, 
   updateDocument,
   updateTransaction, 
@@ -137,6 +139,7 @@ export function BankTransactionsMultiAccountAdvanced() {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [categories, setCategories] = React.useState<Category[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [refreshing, setRefreshing] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   // ====== 初始余额和期末余额计算逻辑（整合，可直接插入组件顶部） ======
@@ -172,9 +175,9 @@ export function BankTransactionsMultiAccountAdvanced() {
     return dateA - dateB // 从最旧到最新排序
   })
 
-  // 计算所有交易的总收入和总支出
-  const totalIncome = transactions.reduce((sum, t) => sum + (parseFloat(t.income?.toString() || "0")), 0)
-  const totalExpense = transactions.reduce((sum, t) => sum + (parseFloat(t.expense?.toString() || "0")), 0)
+  // 计算筛选后交易的总收入和总支出
+  const totalIncome = filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.income?.toString() || "0")), 0)
+  const totalExpense = filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.expense?.toString() || "0")), 0)
   const cumulativeBalance = totalIncome - totalExpense
   
   // 计算所有交易按时间顺序的累计余额
@@ -328,6 +331,36 @@ export function BankTransactionsMultiAccountAdvanced() {
     }
   }, [currentUser, selectedBankAccountId])
 
+  // 刷新交易数据（不影响初始加载状态）
+  const handleRefresh = React.useCallback(async () => {
+    if (!currentUser || !selectedBankAccountId || refreshing) return
+    
+    try {
+      setRefreshing(true)
+      const transactions = await getTransactionsByBankAccount(selectedBankAccountId)
+      setTransactions(transactions)
+      setFilteredTransactions(transactions)
+      setPagination(prev => ({
+        ...prev,
+        totalItems: transactions.length
+      }))
+      
+      toast({
+        title: "刷新成功",
+        description: "交易数据已更新",
+      })
+    } catch (error: any) {
+      console.error("Error refreshing transactions:", error)
+      toast({
+        title: "刷新失败",
+        description: "无法更新交易数据: " + error.message,
+        variant: "destructive"
+      })
+    } finally {
+      setRefreshing(false)
+    }
+  }, [currentUser, selectedBankAccountId, refreshing, toast])
+
   // 加载银行账户
   const fetchBankAccounts = React.useCallback(async () => {
     if (!currentUser) return
@@ -403,7 +436,13 @@ export function BankTransactionsMultiAccountAdvanced() {
     }
 
     if (advancedFilters.project !== "all") {
-      filtered = filtered.filter(transaction => transaction.projectid === advancedFilters.project)
+      if (advancedFilters.project === "uncategorized") {
+        // 筛选未分类项目：没有项目ID或项目ID为空的交易
+        filtered = filtered.filter(transaction => !transaction.projectid || transaction.projectid.trim() === "")
+      } else {
+        // 筛选特定项目
+        filtered = filtered.filter(transaction => transaction.projectid === advancedFilters.project)
+      }
     }
 
     if (advancedFilters.category !== "all") {
@@ -874,11 +913,11 @@ export function BankTransactionsMultiAccountAdvanced() {
           description: "交易已成功更新",
         })
       } else {
-        // 添加新交易
-        await addTransactionWithBankAccount(transactionData, selectedBankAccountId)
+        // 添加新交易并自动生成日记账分录
+        await addTransactionWithAutoJournalEntry(transactionData, selectedBankAccountId)
         toast({
           title: "添加成功",
-          description: "交易已成功添加",
+          description: "交易已成功添加并生成日记账分录",
         })
       }
 
@@ -1021,7 +1060,7 @@ export function BankTransactionsMultiAccountAdvanced() {
     income: number
     status: "Completed" | "Pending" | "Draft"
     payer?: string
-    projectid?: string
+    projectname?: string
     projectName?: string
     category?: string
     bankAccountId?: string
@@ -1056,8 +1095,8 @@ export function BankTransactionsMultiAccountAdvanced() {
           income: parsedTransaction.income,
           status: parsedTransaction.status,
           payer: parsedTransaction.payer || "",
-          projectid: parsedTransaction.projectid || "",
-          projectName: parsedTransaction.projectName || "",
+          projectid: parsedTransaction.projectname || "",
+          projectName: parsedTransaction.projectName || parsedTransaction.projectname || "",
           category: parsedTransaction.category || "",
           bankAccountId: bankAccountId,
           createdByUid: currentUser.uid
@@ -1068,8 +1107,8 @@ export function BankTransactionsMultiAccountAdvanced() {
           await updateTransaction(parsedTransaction.originalId, transactionData)
           updatedCount++
         } else {
-          // 添加新交易
-          await addTransactionWithBankAccount(transactionData, bankAccountId)
+          // 添加新交易并自动生成日记账分录
+          await addTransactionWithAutoJournalEntry(transactionData, bankAccountId)
           addedCount++
         }
       }
@@ -1127,7 +1166,7 @@ export function BankTransactionsMultiAccountAdvanced() {
         runningBalance,
         t.status,
         t.payer || '',
-        t.projectName || '',
+        t.projectName || t.projectid || '',
         t.category || ''
       ]
     })
@@ -1173,6 +1212,16 @@ export function BankTransactionsMultiAccountAdvanced() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={refreshing || !selectedBankAccountId}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? '刷新中...' : '刷新'}
+          </Button>
+
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             导出
@@ -1258,7 +1307,7 @@ export function BankTransactionsMultiAccountAdvanced() {
             <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{transactions.length}</div>
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{filteredTransactions.length}</div>
           </CardContent>
         </Card>
         
@@ -1481,6 +1530,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">全部项目</SelectItem>
+                    <SelectItem value="uncategorized">未分类项目</SelectItem>
                     {Object.entries(getGroupedProjects(getFilteredProjectsForAdvancedFilter())).map(([bodCategory, projects]) => (
                       <div key={`advanced-filter-${bodCategory}`}>
                         <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-muted/30">
@@ -1714,7 +1764,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                         </Badge>
                       </TableCell>
                       <TableCell>{transaction.payer || "-"}</TableCell>
-                      <TableCell className="max-w-xs truncate">{transaction.projectName || "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{transaction.projectName || transaction.projectid || "-"}</TableCell>
                       <TableCell>{transaction.category || "-"}</TableCell>
                       {hasPermission(RoleLevels[UserRoles.ASSISTANT_VICE_PRESIDENT]) && (
                         <TableCell className="w-20">
@@ -2145,7 +2195,7 @@ export function BankTransactionsMultiAccountAdvanced() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">保持不变</SelectItem>
-                  <SelectItem value="empty">清空项目</SelectItem>
+                  <SelectItem value="empty">设为未分类</SelectItem>
                   
                   {/* 账号户口分类 */}
                   <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground bg-blue-50 border-b">
@@ -2297,7 +2347,7 @@ export function BankTransactionsMultiAccountAdvanced() {
           </DialogHeader>
           <div className="pt-4">
             <BankTransactionsCharts 
-              transactions={transactions}
+              transactions={filteredTransactions}
               bankAccount={bankAccounts.find(acc => acc.id === selectedBankAccountId) || null}
             />
           </div>

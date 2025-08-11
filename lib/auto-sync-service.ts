@@ -11,9 +11,15 @@ import {
   getProjectSpentAmount,
   getBankAccountStats,
   getCategoryStats,
-  getProjectIdByProjectId
+  getProjectIdByProjectId,
+  getBankAccountById,
+  getCategoryIdByCode,
+  calculateAccountBalance,
+  updateAccountBalance,
+  updateMultipleAccountBalances,
+  getAccountById
 } from './firebase-utils'
-import type { Transaction, Project, Account, Category, BankAccount } from './data'
+import type { Transaction, Project, Account, Category, BankAccount, JournalEntry } from './data'
 
 // 自动同步服务类
 class AutoSyncService {
@@ -41,6 +47,9 @@ class AutoSyncService {
     
     // 注册银行账户相关事件监听器
     this.registerBankAccountListeners()
+    
+    // 注册日记账分录相关事件监听器
+    this.registerJournalEntryListeners()
 
     this.isInitialized = true
     console.log('✅ 自动关联更新服务初始化完成')
@@ -98,6 +107,24 @@ class AutoSyncService {
     // 银行账户更新时
     onEvent('bankAccount:updated', async ({ bankAccount, previousData }) => {
       await this.queueSync(() => this.handleBankAccountUpdated(bankAccount, previousData))
+    })
+  }
+
+  // 注册日记账分录事件监听器
+  private registerJournalEntryListeners(): void {
+    // 日记账分录创建时
+    onEvent('journalEntry:created', async ({ journalEntry }) => {
+      await this.queueSync(() => this.handleJournalEntryCreated(journalEntry))
+    })
+
+    // 日记账分录更新时
+    onEvent('journalEntry:updated', async ({ journalEntry, previousData }) => {
+      await this.queueSync(() => this.handleJournalEntryUpdated(journalEntry, previousData))
+    })
+
+    // 日记账分录删除时
+    onEvent('journalEntry:deleted', async ({ entryId, affectedAccounts }) => {
+      await this.queueSync(() => this.handleJournalEntryDeleted(entryId, affectedAccounts))
     })
   }
 
@@ -310,8 +337,11 @@ class AutoSyncService {
       await this.updateTransactionsBankAccountName(bankAccount.id!, bankAccount.name)
     }
 
-    // 更新银行账户余额
-    await this.updateBankAccountBalance(bankAccount.id!)
+    // 只有在初始余额变更时才重新计算当前余额
+    if (previousData?.initialBalance !== bankAccount.initialBalance) {
+      console.log(`💰 检测到初始余额变更: ${previousData?.initialBalance} → ${bankAccount.initialBalance}，重新计算当前余额`)
+      await this.updateBankAccountBalance(bankAccount.id!)
+    }
 
     // 失效相关缓存
     this.invalidateRelatedCache('bankAccounts', bankAccount.id!)
@@ -322,11 +352,23 @@ class AutoSyncService {
   // 更新银行账户余额
   private async updateBankAccountBalance(bankAccountId: string): Promise<void> {
     try {
+      // 获取银行账户信息以得到初始余额
+      const bankAccount = await getBankAccountById(bankAccountId)
+      if (!bankAccount) {
+        console.error('银行账户不存在:', bankAccountId)
+        return
+      }
+
+      // 获取所有交易记录
       const transactions = await getTransactionsByBankAccount(bankAccountId)
-      const totalBalance = transactions.reduce((sum, t) => sum + (t.income || 0) - (t.expense || 0), 0)
+      const transactionsNetAmount = transactions.reduce((sum, t) => sum + (t.income || 0) - (t.expense || 0), 0)
       
-      await updateBankAccount(bankAccountId, { balance: totalBalance })
-      console.log(`💰 银行账户 ${bankAccountId} 余额已更新为: ${totalBalance}`)
+      // 正确计算：当前余额 = 初始余额 + 所有交易的净额
+      const initialBalance = bankAccount.initialBalance || 0
+      const currentBalance = initialBalance + transactionsNetAmount
+      
+      await updateBankAccount(bankAccountId, { balance: currentBalance })
+      console.log(`💰 银行账户 ${bankAccountId} 余额已更新: 初始余额 ${initialBalance} + 交易净额 ${transactionsNetAmount} = 当前余额 ${currentBalance}`)
     } catch (error) {
       console.error('更新银行账户余额失败:', error)
     }
@@ -353,6 +395,13 @@ class AutoSyncService {
   // 更新分类统计
   private async updateCategoryStats(categoryCode: string): Promise<void> {
     try {
+      // 首先获取分类的Firestore文档ID
+      const categoryId = await getCategoryIdByCode(categoryCode)
+      if (!categoryId) {
+        console.warn(`⚠️ 找不到分类代码 ${categoryCode} 对应的文档，跳过统计更新`)
+        return
+      }
+
       const transactions = await getTransactionsByCategory(categoryCode)
       const stats = {
         totalTransactions: transactions.length,
@@ -360,7 +409,7 @@ class AutoSyncService {
         totalExpense: transactions.reduce((sum, t) => sum + (t.expense || 0), 0)
       }
       
-      await updateCategory(categoryCode, { stats })
+      await updateCategory(categoryId, { stats })
       console.log(`📈 分类 ${categoryCode} 统计已更新`)
     } catch (error) {
       console.error('更新分类统计失败:', error)
@@ -512,6 +561,96 @@ class AutoSyncService {
       queueLength: this.syncQueue.length,
       isProcessing: this.isProcessingQueue
     }
+  }
+
+  // 处理账户更新
+  private async handleAccountUpdated(
+    account: Account, 
+    previousData?: Partial<Account>
+  ): Promise<void> {
+    console.log('🔄 处理账户更新事件:', account.id)
+    
+    // 如果账户的余额字段被手动修改，我们不需要重新计算
+    // 但如果其他字段（如类型）发生变化，我们需要重新计算余额
+    const needsBalanceRecalculation = 
+      previousData?.type !== account.type || // 账户类型变更
+      (!previousData?.balance && account.balance) // 新账户需要初始化余额
+
+    if (needsBalanceRecalculation && account.id) {
+      try {
+        // 重新计算账户余额
+        await updateAccountBalance(account.id)
+        console.log(`✅ 账户 ${account.id} 余额已重新计算`)
+      } catch (error) {
+        console.error('重新计算账户余额失败:', error)
+      }
+    }
+
+    console.log('✅ 账户更新同步完成')
+  }
+
+  // 处理日记账分录创建
+  private async handleJournalEntryCreated(journalEntry: JournalEntry): Promise<void> {
+    console.log('🔄 处理日记账分录创建事件:', journalEntry.id)
+    
+    // 获取所有涉及的账户
+    const affectedAccountIds = [...new Set(journalEntry.entries.map(entry => entry.account))]
+    
+    try {
+      // 批量更新涉及账户的余额
+      await updateMultipleAccountBalances(affectedAccountIds)
+      console.log(`✅ 已更新 ${affectedAccountIds.length} 个账户的余额`)
+    } catch (error) {
+      console.error('处理日记账分录创建失败:', error)
+    }
+
+    console.log('✅ 日记账分录创建同步完成')
+  }
+
+  // 处理日记账分录更新
+  private async handleJournalEntryUpdated(
+    journalEntry: JournalEntry, 
+    previousData?: Partial<JournalEntry>
+  ): Promise<void> {
+    console.log('🔄 处理日记账分录更新事件:', journalEntry.id)
+    
+    // 获取当前和之前涉及的所有账户
+    const currentAccountIds = [...new Set(journalEntry.entries.map(entry => entry.account))]
+    const previousAccountIds = previousData?.entries ? 
+      [...new Set(previousData.entries.map(entry => entry.account))] : []
+    
+    // 合并所有需要更新的账户
+    const allAffectedAccountIds = [...new Set([...currentAccountIds, ...previousAccountIds])]
+    
+    try {
+      // 批量更新涉及账户的余额
+      await updateMultipleAccountBalances(allAffectedAccountIds)
+      console.log(`✅ 已更新 ${allAffectedAccountIds.length} 个账户的余额`)
+    } catch (error) {
+      console.error('处理日记账分录更新失败:', error)
+    }
+
+    console.log('✅ 日记账分录更新同步完成')
+  }
+
+  // 处理日记账分录删除
+  private async handleJournalEntryDeleted(entryId: string, affectedAccounts?: string[]): Promise<void> {
+    console.log('🔄 处理日记账分录删除事件:', entryId)
+    
+    if (!affectedAccounts || affectedAccounts.length === 0) {
+      console.warn('⚠️ 没有提供受影响的账户信息，跳过余额更新')
+      return
+    }
+    
+    try {
+      // 批量更新涉及账户的余额
+      await updateMultipleAccountBalances(affectedAccounts)
+      console.log(`✅ 已更新 ${affectedAccounts.length} 个账户的余额`)
+    } catch (error) {
+      console.error('处理日记账分录删除失败:', error)
+    }
+
+    console.log('✅ 日记账分录删除同步完成')
   }
 
   // 清理服务

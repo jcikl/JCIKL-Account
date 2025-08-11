@@ -142,11 +142,27 @@ export async function updateAccount(id: string, accountData: Partial<Omit<Accoun
     console.log('Updating account in Firebase:', { id, accountData })
     console.log('父账户字段:', accountData.parent)
     
+    // 获取更新前的账户数据
+    const previousAccount = await getAccountById(id)
+    
     const docRef = doc(db, "accounts", id)
     await updateDoc(docRef, {
       ...accountData,
       updatedAt: new Date().toISOString()
     })
+    
+    // 获取更新后的账户数据
+    const updatedAccount = await getAccountById(id)
+    
+    if (updatedAccount) {
+      // 发出账户更新事件
+      const { emitEvent } = await import('./event-bus')
+      await emitEvent('account:updated', { 
+        account: updatedAccount, 
+        previousData: previousAccount || undefined 
+      })
+    }
+    
     console.log('Account updated successfully')
   } catch (error) {
     console.error('Error updating account:', error)
@@ -594,6 +610,160 @@ export async function getJournalEntries(): Promise<JournalEntry[]> {
   return getCollection<JournalEntry>("journalEntries")
 }
 
+/**
+ * 获取特定账户相关的日记账分录
+ */
+export async function getJournalEntriesByAccount(accountId: string): Promise<JournalEntry[]> {
+  try {
+    console.log('获取账户相关的日记账分录:', accountId)
+    const q = query(
+      collection(db, "journalEntries"),
+      where("status", "==", "Posted"), // 只获取已过账的分录
+      orderBy("date", "desc")
+    )
+    const querySnapshot = await getDocs(q)
+    
+    // 过滤包含指定账户的分录
+    const entries = querySnapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }) as JournalEntry)
+      .filter(entry => 
+        entry.entries.some(e => e.account === accountId)
+      )
+    
+    console.log(`找到 ${entries.length} 条包含账户 ${accountId} 的日记账分录`)
+    return entries
+  } catch (error) {
+    console.error('Error getting journal entries by account:', error)
+    throw new Error(`Failed to get journal entries by account: ${error}`)
+  }
+}
+
+/**
+ * 计算账户余额（基于日记账分录）
+ */
+export async function calculateAccountBalance(accountId: string): Promise<number> {
+  try {
+    console.log('开始计算账户余额:', accountId)
+    
+    // 获取账户信息以确定账户类型
+    const account = await getAccountById(accountId)
+    if (!account) {
+      console.warn('账户不存在:', accountId)
+      return 0
+    }
+    
+    // 获取相关的日记账分录
+    const journalEntries = await getJournalEntriesByAccount(accountId)
+    
+    let balance = 0
+    
+    // 根据复式记账原理计算余额
+    journalEntries.forEach(entry => {
+      entry.entries.forEach(entryLine => {
+        if (entryLine.account === accountId) {
+          // 根据账户类型确定借贷方向
+          switch (account.type) {
+            case 'Asset':     // 资产账户：借方增加，贷方减少
+            case 'Expense':   // 费用账户：借方增加，贷方减少
+              balance += entryLine.debit - entryLine.credit
+              break
+            case 'Liability': // 负债账户：贷方增加，借方减少
+            case 'Equity':    // 权益账户：贷方增加，借方减少
+            case 'Revenue':   // 收入账户：贷方增加，借方减少
+              balance += entryLine.credit - entryLine.debit
+              break
+            default:
+              console.warn('未知账户类型:', account.type)
+          }
+        }
+      })
+    })
+    
+    console.log(`账户 ${accountId} (${account.name}) 计算余额: ${balance}`)
+    return balance
+  } catch (error) {
+    console.error('Error calculating account balance:', error)
+    throw new Error(`Failed to calculate account balance: ${error}`)
+  }
+}
+
+/**
+ * 批量计算多个账户的余额
+ */
+export async function calculateMultipleAccountBalances(accountIds: string[]): Promise<Map<string, number>> {
+  try {
+    console.log('批量计算账户余额:', accountIds.length, '个账户')
+    
+    const balances = new Map<string, number>()
+    
+    // 并行计算所有账户余额
+    const calculations = accountIds.map(async (accountId) => {
+      try {
+        const balance = await calculateAccountBalance(accountId)
+        return { accountId, balance }
+      } catch (error) {
+        console.error(`计算账户 ${accountId} 余额失败:`, error)
+        return { accountId, balance: 0 }
+      }
+    })
+    
+    const results = await Promise.all(calculations)
+    
+    results.forEach(({ accountId, balance }) => {
+      balances.set(accountId, balance)
+    })
+    
+    console.log('批量余额计算完成')
+    return balances
+  } catch (error) {
+    console.error('Error calculating multiple account balances:', error)
+    throw new Error(`Failed to calculate multiple account balances: ${error}`)
+  }
+}
+
+/**
+ * 更新账户余额到数据库
+ */
+export async function updateAccountBalance(accountId: string, calculatedBalance?: number): Promise<void> {
+  try {
+    const balance = calculatedBalance ?? await calculateAccountBalance(accountId)
+    
+    const docRef = doc(db, "accounts", accountId)
+    await updateDoc(docRef, {
+      balance: balance,
+      updatedAt: new Date().toISOString()
+    })
+    
+    console.log(`✅ 账户 ${accountId} 余额已更新为: ${balance}`)
+  } catch (error) {
+    console.error('Error updating account balance:', error)
+    throw new Error(`Failed to update account balance: ${error}`)
+  }
+}
+
+/**
+ * 批量更新多个账户余额
+ */
+export async function updateMultipleAccountBalances(accountIds: string[]): Promise<void> {
+  try {
+    console.log('批量更新账户余额:', accountIds.length, '个账户')
+    
+    // 首先批量计算所有余额
+    const balances = await calculateMultipleAccountBalances(accountIds)
+    
+    // 然后批量更新
+    const updatePromises = Array.from(balances.entries()).map(([accountId, balance]) => 
+      updateAccountBalance(accountId, balance)
+    )
+    
+    await Promise.all(updatePromises)
+    console.log('✅ 批量账户余额更新完成')
+  } catch (error) {
+    console.error('Error updating multiple account balances:', error)
+    throw new Error(`Failed to update multiple account balances: ${error}`)
+  }
+}
+
 export async function getUsers(): Promise<UserProfile[]> {
   return getCollection<UserProfile>("users")
 }
@@ -858,6 +1028,24 @@ export async function checkCategoryCodeExists(code: string): Promise<boolean> {
   } catch (error) {
     console.error('Error checking category code existence:', error)
     throw new Error(`Failed to check category code existence: ${error}`)
+  }
+}
+
+export async function getCategoryIdByCode(code: string): Promise<string | null> {
+  try {
+    // console.log('Getting category ID by code:', code)
+    const q = query(collection(db, "categories"), where("code", "==", code))
+    const querySnapshot = await getDocs(q)
+    if (querySnapshot.empty) {
+      console.warn(`分类代码 ${code} 对应的文档不存在`)
+      return null
+    }
+    const doc = querySnapshot.docs[0]
+    // console.log(`Found category ID ${doc.id} for code ${code}`)
+    return doc.id
+  } catch (error) {
+    console.error('Error getting category ID by code:', error)
+    return null
   }
 }
 
@@ -1924,5 +2112,269 @@ export async function getBankAccountStats(): Promise<{
   } catch (error) {
     console.error('Error getting bank account stats:', error)
     throw new Error(`Failed to get bank account stats: ${error}`)
+  }
+}
+
+// ==================== 自动日记账分录生成 ====================
+
+/**
+ * 根据交易类型和分类获取对应的会计账户
+ */
+export async function getAccountMappingForTransaction(
+  transaction: Transaction,
+  bankAccountId: string
+): Promise<{ debitAccountId: string; creditAccountId: string } | null> {
+  try {
+    // 获取银行账户对应的会计账户（通常是现金或银行存款账户）
+    const bankAccount = await getBankAccountById(bankAccountId)
+    if (!bankAccount) {
+      console.error('银行账户不存在:', bankAccountId)
+      return null
+    }
+
+    // 查找银行存款账户（假设账户代码以"1002"开头）
+    const accounts = await getAccounts()
+    const bankDepositAccount = accounts.find(acc => 
+      acc.type === 'Asset' && 
+      (acc.code.startsWith('1002') || acc.name.includes('银行存款') || acc.name.includes('现金'))
+    )
+
+    if (!bankDepositAccount?.id) {
+      console.error('未找到银行存款账户')
+      return null
+    }
+
+    let expenseOrIncomeAccountId: string | undefined
+
+    // 根据分类查找对应的费用或收入账户
+    if (transaction.category) {
+      // 优先根据分类匹配账户
+      const categoryAccount = accounts.find(acc => 
+        acc.name.includes(transaction.category!) || 
+        acc.description?.includes(transaction.category!)
+      )
+      if (categoryAccount?.id) {
+        expenseOrIncomeAccountId = categoryAccount.id
+      }
+    }
+
+    // 如果没有找到分类对应的账户，使用默认账户
+    if (!expenseOrIncomeAccountId) {
+      if (transaction.expense > 0) {
+        // 查找费用账户
+        const expenseAccount = accounts.find(acc => 
+          acc.type === 'Expense' && 
+          (acc.name.includes('管理费用') || acc.name.includes('其他费用'))
+        )
+        expenseOrIncomeAccountId = expenseAccount?.id
+      } else if (transaction.income > 0) {
+        // 查找收入账户
+        const incomeAccount = accounts.find(acc => 
+          acc.type === 'Revenue' && 
+          (acc.name.includes('其他收入') || acc.name.includes('营业收入'))
+        )
+        expenseOrIncomeAccountId = incomeAccount?.id
+      }
+    }
+
+    if (!expenseOrIncomeAccountId) {
+      console.error('未找到对应的费用或收入账户')
+      return null
+    }
+
+    // 根据交易类型确定借贷方
+    if (transaction.expense > 0) {
+      // 支出：借方费用账户，贷方银行账户
+      return {
+        debitAccountId: expenseOrIncomeAccountId,
+        creditAccountId: bankDepositAccount.id
+      }
+    } else if (transaction.income > 0) {
+      // 收入：借方银行账户，贷方收入账户
+      return {
+        debitAccountId: bankDepositAccount.id,
+        creditAccountId: expenseOrIncomeAccountId
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.error('Error getting account mapping for transaction:', error)
+    return null
+  }
+}
+
+/**
+ * 自动为交易生成日记账分录
+ */
+export async function generateJournalEntryForTransaction(
+  transaction: Transaction,
+  bankAccountId: string
+): Promise<string | null> {
+  try {
+    console.log('🔄 开始为交易生成日记账分录:', transaction.id)
+
+    // 获取账户映射
+    const accountMapping = await getAccountMappingForTransaction(transaction, bankAccountId)
+    if (!accountMapping) {
+      console.error('无法确定账户映射，跳过日记账分录生成')
+      return null
+    }
+
+    // 获取账户信息
+    const [debitAccount, creditAccount] = await Promise.all([
+      getAccountById(accountMapping.debitAccountId),
+      getAccountById(accountMapping.creditAccountId)
+    ])
+
+    if (!debitAccount || !creditAccount) {
+      console.error('账户信息不完整，无法生成日记账分录')
+      return null
+    }
+
+    // 创建日记账分录
+    const journalEntry: Omit<JournalEntry, "id"> = {
+      date: typeof transaction.date === 'string' 
+        ? transaction.date 
+        : new Date(transaction.date.seconds * 1000).toISOString().split("T")[0],
+      reference: `AUTO-${transaction.sequenceNumber || transaction.id?.slice(-6)}`,
+      description: `自动生成 - ${transaction.description}${transaction.description2 ? ` (${transaction.description2})` : ''}`,
+      entries: [],
+      status: "Posted",
+      createdByUid: transaction.createdByUid
+    }
+
+    // 添加分录明细
+    const amount = transaction.expense > 0 ? transaction.expense : transaction.income
+    
+    journalEntry.entries = [
+      {
+        account: accountMapping.debitAccountId,
+        accountName: debitAccount.name,
+        debit: amount,
+        credit: 0
+      },
+      {
+        account: accountMapping.creditAccountId,
+        accountName: creditAccount.name,
+        debit: 0,
+        credit: amount
+      }
+    ]
+
+    // 保存日记账分录
+    const journalEntryId = await addDocument("journalEntries", journalEntry)
+    
+    console.log(`✅ 已为交易 ${transaction.id} 生成日记账分录 ${journalEntryId}`)
+    console.log(`   借方: ${debitAccount.name} $${amount}`)
+    console.log(`   贷方: ${creditAccount.name} $${amount}`)
+
+    return journalEntryId
+  } catch (error) {
+    console.error('Error generating journal entry for transaction:', error)
+    return null
+  }
+}
+
+/**
+ * 增强版添加交易记录（自动生成日记账分录）
+ */
+export async function addTransactionWithAutoJournalEntry(
+  transactionData: Omit<Transaction, "id" | "sequenceNumber">,
+  bankAccountId: string
+): Promise<string> {
+  try {
+    console.log('🚀 开始添加交易记录并自动生成日记账分录')
+    
+    // 1. 添加交易记录
+    const transactionId = await addTransactionWithBankAccount(transactionData, bankAccountId)
+    
+    // 2. 获取完整的交易记录（包含ID和序号）
+    const fullTransaction = await getDocument("transactions", transactionId) as Transaction
+    if (!fullTransaction) {
+      throw new Error('Failed to retrieve created transaction')
+    }
+
+    // 3. 自动生成日记账分录
+    const journalEntryId = await generateJournalEntryForTransaction(fullTransaction, bankAccountId)
+    
+    if (journalEntryId) {
+      console.log(`✅ 交易 ${transactionId} 和日记账分录 ${journalEntryId} 创建成功`)
+    } else {
+      console.warn(`⚠️ 交易 ${transactionId} 创建成功，但日记账分录生成失败`)
+    }
+
+    return transactionId
+  } catch (error) {
+    console.error('Error adding transaction with auto journal entry:', error)
+    throw new Error(`Failed to add transaction with auto journal entry: ${error}`)
+  }
+}
+
+/**
+ * 批量为现有交易生成日记账分录
+ */
+export async function generateJournalEntriesForExistingTransactions(
+  limit: number = 50
+): Promise<{
+  processed: number
+  successful: number
+  failed: number
+  errors: string[]
+}> {
+  try {
+    console.log(`🔄 开始为现有交易批量生成日记账分录（限制 ${limit} 条）`)
+    
+    // 获取没有对应日记账分录的交易
+    const transactions = await getTransactionsBatch(limit)
+    const errors: string[] = []
+    let successful = 0
+    let failed = 0
+
+    for (const transaction of transactions) {
+      if (!transaction.id || !transaction.bankAccountId) {
+        failed++
+        errors.push(`交易 ${transaction.id} 缺少必要信息`)
+        continue
+      }
+
+      try {
+        // 检查是否已有对应的日记账分录
+        const existingEntries = await getJournalEntriesByAccount('dummy') // 这里需要一个更好的检查方法
+        const hasExistingEntry = existingEntries.some(entry => 
+          entry.reference.includes(transaction.sequenceNumber?.toString() || transaction.id!) ||
+          entry.description.includes(transaction.description)
+        )
+
+        if (hasExistingEntry) {
+          console.log(`跳过交易 ${transaction.id}，已有对应的日记账分录`)
+          continue
+        }
+
+        const journalEntryId = await generateJournalEntryForTransaction(transaction, transaction.bankAccountId)
+        
+        if (journalEntryId) {
+          successful++
+        } else {
+          failed++
+          errors.push(`交易 ${transaction.id} 日记账分录生成失败`)
+        }
+      } catch (error) {
+        failed++
+        errors.push(`交易 ${transaction.id} 处理失败: ${error}`)
+      }
+    }
+
+    console.log(`✅ 批量生成完成: 处理 ${transactions.length} 条，成功 ${successful} 条，失败 ${failed} 条`)
+    
+    return {
+      processed: transactions.length,
+      successful,
+      failed,
+      errors
+    }
+  } catch (error) {
+    console.error('Error generating journal entries for existing transactions:', error)
+    throw new Error(`Failed to generate journal entries for existing transactions: ${error}`)
   }
 }

@@ -42,6 +42,7 @@ interface BankAccountFormData {
   bankName: string
   accountNumber: string
   balance: number
+  initialBalance: number
   currency: string
   isActive: boolean
 }
@@ -81,6 +82,7 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
     bankName: "",
     accountNumber: "",
     balance: 0,
+    initialBalance: 0,
     currency: "CNY",
     isActive: true
   })
@@ -126,6 +128,7 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
       bankName: "",
       accountNumber: "",
       balance: 0,
+      initialBalance: 0,
       currency: "CNY",
       isActive: true
     })
@@ -208,11 +211,11 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
         return
       }
 
-      // 验证余额
-      if (isNaN(formData.balance) || formData.balance < -999999999) {
+      // 验证初始余额
+      if (isNaN(formData.initialBalance) || formData.initialBalance < -999999999) {
         toast({
           title: "错误",
-          description: "余额格式不正确",
+          description: "初始余额格式不正确",
           variant: "destructive"
         })
         setSubmitting(false)
@@ -235,11 +238,21 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
         }
       }
 
-      const bankAccountData = {
-        ...formData,
+      const bankAccountData: any = {
+        name: formData.name,
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber,
+        initialBalance: formData.initialBalance, // 初始余额
+        currency: formData.currency,
+        isActive: formData.isActive,
         createdByUid: currentUser.uid,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
+      }
+      
+      // 只在新建时设置初始的当前余额
+      if (!isEditMode) {
+        bankAccountData.balance = formData.initialBalance
       }
       
       console.log('准备保存的银行账户数据:', bankAccountData)
@@ -286,7 +299,8 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
       name: bankAccount.name,
       bankName: bankAccount.bankName || "",
       accountNumber: bankAccount.accountNumber || "",
-      balance: bankAccount.balance,
+      balance: bankAccount.balance, // 这个字段不会被用于保存，只是为了兼容接口
+      initialBalance: bankAccount.initialBalance || 0, // 正确使用初始余额
       currency: bankAccount.currency,
       isActive: bankAccount.isActive
     })
@@ -545,16 +559,36 @@ export function BankAccountManagement({ onBankAccountChange }: BankAccountManage
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="balance">初始余额</Label>
+                <Label htmlFor="initialBalance">初始余额</Label>
                 <Input
-                  id="balance"
+                  id="initialBalance"
                   type="number"
                   step="0.01"
-                  value={formData.balance}
-                  onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) || 0 })}
+                  value={formData.initialBalance}
+                  onChange={(e) => setFormData({ ...formData, initialBalance: parseFloat(e.target.value) || 0 })}
                   placeholder="0.00"
                 />
+                <p className="text-xs text-muted-foreground">账户的期初余额，作为计算基础</p>
               </div>
+              <div className="space-y-2">
+                {isEditMode && editingBankAccount && (
+                  <>
+                    <Label htmlFor="currentBalance">当前余额</Label>
+                    <Input
+                      id="currentBalance"
+                      type="number"
+                      value={editingBankAccount.balance}
+                      disabled
+                      className="bg-muted"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      系统自动计算：初始余额 + 所有交易净额
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="currency">货币类型</Label>
                 <Select value={formData.currency} onValueChange={(value) => 

@@ -86,6 +86,7 @@
     "@types/react-dom": "^19",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
+    "playwright": "^1.54.2",
     "postcss": "^8.5",
     "puppeteer": "^24.15.0",
     "tailwindcss": "^3.4.17",
