@@ -74,13 +74,16 @@ export function ProjectAccountsVirtual() {
       key: "year", 
       header: "年度", 
       width: 80,
-      render: (project: Project) => project.year || "-"
+      render: (project: Project) => {
+        const year = project.projectid.split('_')[0]
+        return year && !isNaN(parseInt(year)) ? year : "-"
+      }
     },
     { 
       key: "category", 
       header: "分类", 
       width: 120,
-      render: (project: Project) => project.category || "-"
+      render: (project: Project) => project.bodCategory || "-"
     },
     { 
       key: "budget", 
@@ -93,8 +96,11 @@ export function ProjectAccountsVirtual() {
       key: "spent", 
       header: "已花费", 
       width: 120,
-      render: (project: Project) => 
-        project.spent ? `$${project.spent.toFixed(2)}` : "-"
+      render: (project: Project) => {
+        // 这里需要从外部数据源获取spent金额
+        // 暂时显示为"-"，实际使用时需要传入spent数据
+        return "-"
+      }
     },
     { 
       key: "remaining", 
@@ -102,8 +108,7 @@ export function ProjectAccountsVirtual() {
       width: 120,
       render: (project: Project) => {
         const budget = project.budget || 0
-        const spent = project.spent || 0
-        const remaining = budget - spent
+        const remaining = project.remaining || 0
         const isOverBudget = remaining < 0
         
         return (
@@ -119,10 +124,10 @@ export function ProjectAccountsVirtual() {
       header: "开始日期", 
       width: 120,
       render: (project: Project) => {
-        if (!project.startDate) return "-"
-        const date = typeof project.startDate === 'string' 
-          ? new Date(project.startDate) 
-          : new Date(project.startDate.seconds * 1000)
+        if (!project.eventDate) return "-"
+        const date = typeof project.eventDate === 'string' 
+          ? new Date(project.eventDate) 
+          : new Date(project.eventDate.seconds * 1000)
         return date.toLocaleDateString()
       }
     },
@@ -131,10 +136,11 @@ export function ProjectAccountsVirtual() {
       header: "结束日期", 
       width: 120,
       render: (project: Project) => {
-        if (!project.endDate) return "-"
-        const date = typeof project.endDate === 'string' 
-          ? new Date(project.endDate) 
-          : new Date(project.endDate.seconds * 1000)
+        // 项目结束日期暂时使用eventDate，实际项目中可能需要单独的endDate字段
+        if (!project.eventDate) return "-"
+        const date = typeof project.eventDate === 'string' 
+          ? new Date(project.eventDate) 
+          : new Date(project.eventDate.seconds * 1000)
         return date.toLocaleDateString()
       }
     }
@@ -203,7 +209,9 @@ export function ProjectAccountsVirtual() {
   const stats = React.useMemo(() => {
     const totalProjects = projects.length
     const totalBudget = projects.reduce((sum, proj) => sum + (proj.budget || 0), 0)
-    const totalSpent = projects.reduce((sum, proj) => sum + (proj.spent || 0), 0)
+    // 注意：这里需要从外部数据源获取spent金额，暂时使用remaining计算
+    const totalRemaining = projects.reduce((sum, proj) => sum + (proj.remaining || 0), 0)
+    const totalSpent = totalBudget - totalRemaining
     const activeProjects = projects.filter(proj => proj.status === 'Active').length
     const completedProjects = projects.filter(proj => proj.status === 'Completed').length
 
@@ -211,7 +219,7 @@ export function ProjectAccountsVirtual() {
       totalProjects,
       totalBudget,
       totalSpent,
-      totalRemaining: totalBudget - totalSpent,
+      totalRemaining,
       activeProjects,
       completedProjects
     }
@@ -232,7 +240,7 @@ export function ProjectAccountsVirtual() {
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             刷新
           </Button>
-          {hasPermission('write') && (
+          {hasPermission(3) && (
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               新增项目

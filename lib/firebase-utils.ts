@@ -884,20 +884,23 @@ export async function getProjectSpentAmount(projectId: string): Promise<number> 
       // 1. 精确匹配：检查交易的项目户口是否匹配项目的projectid
       const exactMatch = transaction.projectid === project.projectid
       
-      // 2. 项目名称匹配：检查交易projectid是否包含项目名称
+      // 2. 项目名称匹配：检查交易projectid是否包含项目名称（更严格的匹配）
       const nameMatch = transaction.projectid && 
+                       project.name &&
+                       project.name.length > 3 && // 避免短名称误匹配
                        transaction.projectid.toLowerCase().includes(project.name.toLowerCase())
       
-      // 3. 项目代码匹配：检查交易projectid是否包含项目代码的关键部分
+      // 3. 项目代码匹配：检查交易projectid是否包含完整的项目代码（更精确的匹配）
       const codeMatch = transaction.projectid && 
                        project.projectid && 
-                       transaction.projectid.toLowerCase().includes(project.projectid.toLowerCase().split('_').pop() || '')
+                       project.projectid.split('_').length > 1 && // 确保有多个部分
+                       transaction.projectid.toLowerCase().includes(project.projectid.toLowerCase())
       
       return exactMatch || nameMatch || codeMatch
     })
     
     // 计算总支出
-    const totalSpent = projectTransactions.reduce((sum, transaction) => sum + transaction.expense, 0)
+    const totalSpent = projectTransactions.reduce((sum, transaction) => sum + (transaction.expense || 0), 0)
     
     // console.log(`Project ${project.name} spent amount: $${totalSpent}`)
     return totalSpent
@@ -1194,7 +1197,8 @@ export async function getProjectsSpentAmounts(projectIds: string[]): Promise<Rec
     return {}
   }
   
-  const cacheKey = `projects_spent_${projectIds.sort().join('_')}`
+  // 使用与 cacheKeys 一致的键格式
+  const cacheKey = `project-spent-amounts:${projectIds.sort().join(',')}`
   const cached = getCachedData<Record<string, number>>(cacheKey)
   if (cached) return cached
   
@@ -1217,6 +1221,97 @@ export async function getProjectsSpentAmounts(projectIds: string[]): Promise<Rec
     return combinedSpentAmounts
   } catch (error) {
     console.error('Error calculating projects spent amounts:', error)
+    throw error
+  }
+}
+
+// 新增：计算项目的总收入金额
+export async function getProjectIncomeAmount(projectId: string): Promise<number> {
+  try {
+    //console.log('Calculating income amount for project:', projectId)
+    
+    // 获取项目信息 - 支持通过projectid或Firestore ID查找
+    let project: Project | null = null
+    
+    // 首先尝试作为Firestore ID查找
+    project = await getProjectById(projectId)
+    
+    // 如果没找到，尝试通过projectid字段查找
+    if (!project) {
+      const projects = await getProjects()
+      project = projects.find(p => p.projectid === projectId) || null
+    }
+    
+    if (!project) {
+      // console.log('Project not found:', projectId)
+      return 0
+    }
+    
+    // 获取所有交易记录
+    const allTransactions = await getTransactions()
+    
+    // 根据projectid匹配银行交易记录
+    const projectTransactions = allTransactions.filter(transaction => {
+      // 1. 精确匹配：检查交易的项目户口是否匹配项目的projectid
+      const exactMatch = transaction.projectid === project.projectid
+      
+      // 2. 项目名称匹配：检查交易projectid是否包含项目名称（更严格的匹配）
+      const nameMatch = transaction.projectid && 
+                       project.name &&
+                       project.name.length > 3 && // 避免短名称误匹配
+                       transaction.projectid.toLowerCase().includes(project.name.toLowerCase())
+      
+      // 3. 项目代码匹配：检查交易projectid是否包含完整的项目代码（更精确的匹配）
+      const codeMatch = transaction.projectid && 
+                       project.projectid && 
+                       project.projectid.split('_').length > 1 && // 确保有多个部分
+                       transaction.projectid.toLowerCase().includes(project.projectid.toLowerCase())
+      
+      return exactMatch || nameMatch || codeMatch
+    })
+    
+    // 计算总收入
+    const totalIncome = projectTransactions.reduce((sum, transaction) => sum + (transaction.income || 0), 0)
+    
+    // console.log(`Project ${project.name} income amount: $${totalIncome}`)
+    return totalIncome
+  } catch (error) {
+    console.error('Error calculating project income amount:', error)
+    throw new Error(`Failed to calculate project income amount: ${error}`)
+  }
+}
+
+// 优化的项目收入金额计算（并行处理）
+export async function getProjectsIncomeAmounts(projectIds: string[]): Promise<Record<string, number>> {
+  // 添加空值检查
+  if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
+    return {}
+  }
+  
+  // 使用与 cacheKeys 一致的键格式
+  const cacheKey = `project-income-amounts:${projectIds.sort().join(',')}`
+  const cached = getCachedData<Record<string, number>>(cacheKey)
+  if (cached) return cached
+  
+  try {
+    // 并行计算所有项目的收入金额
+    const incomePromises = projectIds.map(async (projectId) => {
+      try {
+        const income = await getProjectIncomeAmount(projectId)
+        return { [projectId]: income }
+      } catch (error) {
+        console.error(`Error calculating income amount for project ${projectId}:`, error)
+        return { [projectId]: 0 }
+      }
+    })
+    
+    const incomeResults = await Promise.all(incomePromises)
+    const combinedIncomeAmounts = incomeResults.reduce((acc, curr) => ({ ...acc, ...curr }), {})
+    
+    setCachedData(cacheKey, combinedIncomeAmounts, 5 * 60 * 1000) // 5分钟缓存
+    return combinedIncomeAmounts
+  } catch (error) {
+    console.error('Error calculating projects income amounts:', error)
     throw error
   }
 }

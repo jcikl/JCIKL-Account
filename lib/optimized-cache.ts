@@ -293,6 +293,9 @@ export const cacheKeys = {
   projectSpentAmounts: (projectIds: string[]) => {
     return `project-spent-amounts:${projectIds.sort().join(',')}`
   },
+  projectIncomeAmounts: (projectIds: string[]) => {
+    return `project-income-amounts:${projectIds.sort().join(',')}`
+  },
   transactionStats: () => 'transaction-stats',
   projectStats: () => 'project-stats',
   users: () => 'users',

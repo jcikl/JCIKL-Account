@@ -10,7 +10,7 @@ import { getUserByUid } from "@/lib/firebase-utils"
 import { mockAuth } from "@/lib/mock-auth"
 
 // 检查是否使用模拟认证
-const USE_MOCK_AUTH = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true' || true
+const USE_MOCK_AUTH = process.env.NEXT_PUBLIC_USE_MOCK_AUTH === 'true' || false
 
 interface AuthContextType {
   currentUser: UserProfile | null

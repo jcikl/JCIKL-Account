@@ -7,6 +7,7 @@ import {
   getAccounts, 
   getCategories,
   getProjectsSpentAmounts,
+  getProjectsIncomeAmounts,
   getTransactionStats,
   getProjectStats,
   getUsers
@@ -128,6 +129,24 @@ export function useOptimizedProjectSpentAmounts(projectIds: string[] = []) {
   
   // 使用 useCallback 来 memoize fetcher 函数
   const fetcher = React.useCallback(() => getProjectsSpentAmounts(projectIds), [projectIds])
+  
+  return useCachedData(
+    key,
+    fetcher,
+    {
+      ttl: 3 * 60 * 1000, // 3分钟缓存
+      preload: true,
+      priority: 'high'
+    }
+  )
+}
+
+// 优化的项目收入金额Hook
+export function useOptimizedProjectIncomeAmounts(projectIds: string[] = []) {
+  const key = cacheKeys.projectIncomeAmounts(projectIds)
+  
+  // 使用 useCallback 来 memoize fetcher 函数
+  const fetcher = React.useCallback(() => getProjectsIncomeAmounts(projectIds), [projectIds])
   
   return useCachedData(
     key,

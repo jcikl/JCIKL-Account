@@ -24,7 +24,7 @@ import { ProjectImportDialog } from "./project-import-dialog"
 import { ProjectPasteImportDialog } from "./project-paste-import-dialog"
 import { ProjectDetailsDialogOptimized } from "./project-details-dialog-optimized"
 import { getProjectStatsByBOD, getBODDisplayName } from "@/lib/project-utils"
-import { useOptimizedProjects, useOptimizedProjectSpentAmounts } from "@/hooks/use-optimized-data"
+import { useOptimizedProjects, useOptimizedProjectSpentAmounts, useOptimizedProjectIncomeAmounts } from "@/hooks/use-optimized-data"
 import { globalCache } from "@/lib/optimized-cache"
 import { Pagination } from "@/lib/pagination-utils"
 
@@ -63,6 +63,14 @@ export function ProjectAccountsOptimized() {
     loading: spentAmountsLoading,
     error: spentAmountsError 
   } = useOptimizedProjectSpentAmounts(
+    projects ? projects.map(project => project.id!) : []
+  )
+  
+  const { 
+    data: projectIncomeAmounts, 
+    loading: incomeAmountsLoading,
+    error: incomeAmountsError 
+  } = useOptimizedProjectIncomeAmounts(
     projects ? projects.map(project => project.id!) : []
   )
 
@@ -409,11 +417,12 @@ export function ProjectAccountsOptimized() {
   // 计算统计数据
   const totalBudget = projects?.reduce((sum, project) => sum + (project.budget || 0), 0) || 0
   const totalSpent = projects?.reduce((sum, project) => sum + (projectSpentAmounts?.[project.id!] || 0), 0) || 0
+  const totalIncome = projects?.reduce((sum, project) => sum + (projectIncomeAmounts?.[project.id!] || 0), 0) || 0
   const totalRemaining = totalBudget - totalSpent
   const activeProjectsCount = projects?.filter((p) => p.status === "Active").length || 0
 
   // 加载状态
-  if (projectsLoading || spentAmountsLoading) {
+  if (projectsLoading || spentAmountsLoading || incomeAmountsLoading) {
     return (
       <div className="p-6 text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
@@ -656,6 +665,7 @@ export function ProjectAccountsOptimized() {
                       <TableHead>项目信息</TableHead>
                       <TableHead>BOD分类</TableHead>
                       <TableHead>预算</TableHead>
+                      <TableHead>总收入</TableHead>
                       <TableHead>已花费</TableHead>
                       <TableHead>剩余</TableHead>
                       <TableHead>进度</TableHead>
@@ -667,7 +677,9 @@ export function ProjectAccountsOptimized() {
                   <TableBody>
                     {paginatedProjects.map((project) => {
                       const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                      const progressPercentage = project.budget > 0 ? (spentAmount / project.budget) * 100 : 0
+                      const incomeAmount = projectIncomeAmounts?.[project.id!] || 0
+                      const remainingBudget = incomeAmount - spentAmount
+                      const progressPercentage = incomeAmount > 0 ? (spentAmount / incomeAmount) * 100 : 0
                       
                       return (
                         <TableRow key={project.id}>
@@ -683,16 +695,10 @@ export function ProjectAccountsOptimized() {
                             </Badge>
                           </TableCell>
                           <TableCell>${(project.budget || 0).toLocaleString()}</TableCell>
+                          <TableCell className="text-green-600 font-medium">${incomeAmount.toLocaleString()}</TableCell>
                           <TableCell>${spentAmount.toLocaleString()}</TableCell>
-                          <TableCell className={(() => {
-                            const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                            const calculatedRemaining = (project.budget || 0) - spentAmount
-                            return calculatedRemaining > 0 ? "text-green-600" : "text-red-600"
-                          })()}>
-                            ${(() => {
-                              const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                              return ((project.budget || 0) - spentAmount).toLocaleString()
-                            })()}
+                          <TableCell className={remainingBudget > 0 ? "text-green-600" : "text-red-600"}>
+                            ${remainingBudget.toLocaleString()}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -799,7 +805,9 @@ export function ProjectAccountsOptimized() {
               <CardContent className="space-y-4">
                 {filteredProjects.map((project) => {
                   const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                  const utilizationPercentage = project.budget > 0 ? (spentAmount / project.budget) * 100 : 0
+                  const incomeAmount = projectIncomeAmounts?.[project.id!] || 0
+                  const remainingBudget = incomeAmount - spentAmount
+                  const utilizationPercentage = incomeAmount > 0 ? (spentAmount / incomeAmount) * 100 : 0
                   return (
                     <div key={project.id} className="space-y-2">
                       <div className="flex justify-between text-sm">
@@ -812,7 +820,12 @@ export function ProjectAccountsOptimized() {
                       <Progress value={utilizationPercentage} />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>${spentAmount.toLocaleString()} 已花费</span>
-                        <span>${(project.budget || 0).toLocaleString()} 预算</span>
+                        <span>${incomeAmount.toLocaleString()} 总收入</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className={remainingBudget > 0 ? "text-green-600" : "text-red-600"}>
+                          剩余: ${remainingBudget.toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   )
@@ -829,8 +842,9 @@ export function ProjectAccountsOptimized() {
                 <div className="space-y-4">
                   {filteredProjects.map((project) => {
                     const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                    const isOverBudget = spentAmount > project.budget
-                    const variance = spentAmount - project.budget
+                    const incomeAmount = projectIncomeAmounts?.[project.id!] || 0
+                    const remainingBudget = incomeAmount - spentAmount
+                    const isOverBudget = spentAmount > incomeAmount
                     return (
                       <div key={project.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
@@ -838,10 +852,10 @@ export function ProjectAccountsOptimized() {
                           <p className="text-sm text-muted-foreground">{project.projectid}</p>
                         </div>
                         <div className="text-right">
-                          <p className={`font-medium ${isOverBudget ? "text-red-600" : "text-green-600"}`}>
-                            {isOverBudget ? "+" : ""}${variance.toLocaleString()}
+                          <p className={`font-medium ${remainingBudget > 0 ? "text-green-600" : "text-red-600"}`}>
+                            ${remainingBudget.toLocaleString()}
                           </p>
-                          <p className="text-xs text-muted-foreground">{isOverBudget ? "超出预算" : "低于预算"}</p>
+                          <p className="text-xs text-muted-foreground">{remainingBudget > 0 ? "剩余预算" : "超支"}</p>
                         </div>
                       </div>
                     )
@@ -863,10 +877,10 @@ export function ProjectAccountsOptimized() {
                 <div className="space-y-4">
                   {filteredProjects.map((project) => {
                     const spentAmount = projectSpentAmounts?.[project.id!] || 0
-                    const budget = project.budget || 0
-                    const variance = spentAmount - budget
-                    const variancePercentage = budget > 0 ? (variance / budget) * 100 : 0
-                    const isOverBudget = spentAmount > budget
+                    const incomeAmount = projectIncomeAmounts?.[project.id!] || 0
+                    const remainingBudget = incomeAmount - spentAmount
+                    const variancePercentage = incomeAmount > 0 ? (remainingBudget / incomeAmount) * 100 : 0
+                    const isOverBudget = spentAmount > incomeAmount
                     
                     return (
                       <div key={project.id} className="border rounded-lg p-4 space-y-3">
@@ -880,26 +894,32 @@ export function ProjectAccountsOptimized() {
                           </Badge>
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
                           <div>
-                            <p className="text-muted-foreground">预算金额</p>
-                            <p className="font-medium">${budget.toLocaleString()}</p>
+                            <p className="text-muted-foreground">总收入</p>
+                            <p className="font-medium text-green-600">${incomeAmount.toLocaleString()}</p>
                           </div>
                           <div>
                             <p className="text-muted-foreground">实际支出</p>
                             <p className="font-medium">${spentAmount.toLocaleString()}</p>
                           </div>
+                          <div>
+                            <p className="text-muted-foreground">剩余预算</p>
+                            <p className={`font-medium ${remainingBudget > 0 ? "text-green-600" : "text-red-600"}`}>
+                              ${remainingBudget.toLocaleString()}
+                            </p>
+                          </div>
                         </div>
                         
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>差异</span>
-                            <span className={`font-medium ${isOverBudget ? "text-red-600" : "text-green-600"}`}>
-                              {isOverBudget ? "+" : ""}${variance.toLocaleString()} ({variancePercentage.toFixed(1)}%)
+                            <span>剩余预算</span>
+                            <span className={`font-medium ${remainingBudget > 0 ? "text-green-600" : "text-red-600"}`}>
+                              ${remainingBudget.toLocaleString()} ({variancePercentage.toFixed(1)}%)
                             </span>
                           </div>
                           <Progress 
-                            value={budget > 0 ? Math.min((spentAmount / budget) * 100, 200) : 0} 
+                            value={incomeAmount > 0 ? Math.min((spentAmount / incomeAmount) * 100, 200) : 0} 
                             className={isOverBudget ? "bg-red-100" : ""}
                           />
                         </div>
@@ -918,15 +938,21 @@ export function ProjectAccountsOptimized() {
               <CardContent>
                 <div className="space-y-6">
                   {/* 总体统计 */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
                       <p className="text-2xl font-bold text-blue-600">
                         ${filteredProjects.reduce((sum, p) => sum + (p.budget || 0), 0).toLocaleString()}
                       </p>
                       <p className="text-sm text-muted-foreground">总预算</p>
                     </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">
+                    <div className="text-center p-4 bg-emerald-50 rounded-lg">
+                      <p className="text-2xl font-bold text-emerald-600">
+                        ${filteredProjects.reduce((sum, p) => sum + (projectIncomeAmounts?.[p.id!] || 0), 0).toLocaleString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">总收入</p>
+                    </div>
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <p className="text-2xl font-bold text-red-600">
                         ${filteredProjects.reduce((sum, p) => sum + (projectSpentAmounts?.[p.id!] || 0), 0).toLocaleString()}
                       </p>
                       <p className="text-sm text-muted-foreground">总支出</p>
